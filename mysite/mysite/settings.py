@@ -48,12 +48,16 @@ def _env_bool(name: str, default: bool = False) -> bool:
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-e%#ykfcr^$&18=*tqsmxp67viq))2h%8f#*4=^q1ob!89^(-2k'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-e%#ykfcr^$&18=*tqsmxp67viq))2h%8f#*4=^q1ob!89^(-2k')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = []
+_allowed_hosts_raw = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
+if _allowed_hosts_raw.strip():
+    ALLOWED_HOSTS = [host.strip() for host in _allowed_hosts_raw.split(',') if host.strip()]
+else:
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.vercel.app']
 
 
 # Application definition
