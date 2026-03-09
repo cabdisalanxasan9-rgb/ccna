@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Assistant</title>
+    <style>
+        body { margin: 0; font-family: "Poppins", "Trebuchet MS", sans-serif; background: #f4efe6; color: #1d2935; }
+        .wrap { max-width: 980px; margin: 0 auto; padding: 1rem; }
+        .card { background: #fffaf1; border: 1px solid #d7cbb8; border-radius: 12px; padding: 1rem; margin-bottom: 0.9rem; }
+        textarea { width: 100%; min-height: 180px; border: 1px solid #d7cbb8; border-radius: 8px; padding: 0.6rem; font-family: Consolas, monospace; }
+        button { border: 0; background: #005f73; color: #fff; padding: 0.6rem 0.9rem; border-radius: 8px; cursor: pointer; }
+        .btn-alt { background: #9b2226; }
+        a { color: #005f73; }
+        input[type="password"] { width: 100%; border: 1px solid #d7cbb8; border-radius: 8px; padding: 0.55rem; }
+        .muted { color: #667380; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; border-bottom: 1px solid #eadfce; padding: 0.45rem; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>AI Lab Assistant</h1>
+            <p>Ask for network lab designs, troubleshooting steps, or protocol explanations.</p>
+            <p><a href="/">Back to Builder</a></p>
+        </div>
+
+        <div class="card">
+            <form method="post">
+                {% csrf_token %}
+                <label for="prompt">Prompt</label>
+                <textarea id="prompt" name="prompt" placeholder="Example: Build a 3-router OSPF lab with VLAN and NAT.">{{ prompt }}</textarea>
+                <label for="api_key">OpenAI API Key (optional, stored in session)</label>
+                <input id="api_key" name="api_key" type="password" placeholder="sk-...">
+                <p class="muted">API key status: {% if has_api_key %}Available{% else %}Not set{% endif %}</p>
+                <p>
+                    <button type="submit">Ask AI</button>
+                    <button class="btn-alt" type="submit" name="clear_api_key" value="1">Clear Saved Key</button>
+                </p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Status</h2>
+            <p class="muted">{{ status_note|default:"Ready" }}</p>
+            <p class="muted">Cache hit: {% if cache_hit %}Yes{% else %}No{% endif %} | Request time: {{ request_ms }} ms</p>
+        </div>
+
+        <div class="card">
+            <h2>Response</h2>
+            <textarea readonly>{{ response_text }}</textarea>
+        </div>
+
+        <div class="card">
+            <h2>Recent AI Requests</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Model</th>
+                        <th>Cache</th>
+                        <th>Latency (ms)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in recent_logs %}
+                    <tr>
+                        <td>{{ row.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>{{ row.model_name }}</td>
+                        <td>{% if row.cache_hit %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ row.response_ms }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4">No AI requests yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

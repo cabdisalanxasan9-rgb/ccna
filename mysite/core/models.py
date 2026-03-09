@@ -1,0 +1,91 @@
+from django.db import models
+from django.contrib.auth import get_user_model
+import secrets
+
+
+User = get_user_model()
+
+
+def _generate_api_key():
+	return secrets.token_hex(24)
+
+
+class Task(models.Model):
+	title = models.CharField(max_length=120)
+	description = models.TextField(blank=True)
+	is_done = models.BooleanField(default=False)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return self.title
+
+
+class NetworkLab(models.Model):
+	DIFFICULTY_CHOICES = [
+		("beginner", "Beginner"),
+		("intermediate", "Intermediate"),
+		("advanced", "Advanced"),
+	]
+
+	name = models.CharField(max_length=140)
+	owner = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="network_labs")
+	routers = models.PositiveIntegerField(default=2)
+	switches = models.PositiveIntegerField(default=2)
+	pcs = models.PositiveIntegerField(default=4)
+	vlan_count = models.PositiveIntegerField(default=2)
+	ip_scheme = models.CharField(max_length=64, default="192.168.0.0/16")
+	protocols = models.CharField(max_length=200, default="OSPF")
+	difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default="beginner")
+
+	topology_text = models.TextField()
+	topology_diagram = models.TextField()
+	cli_config = models.TextField()
+	verification_steps = models.TextField()
+	troubleshooting_guide = models.TextField()
+	learning_notes = models.TextField()
+	subnet_plan = models.TextField()
+	quiz = models.JSONField(default=list)
+	suggestions = models.JSONField(default=list)
+
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.name} ({self.created_at:%Y-%m-%d})"
+
+
+class AIRequestLog(models.Model):
+	owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ai_requests")
+	prompt_hash = models.CharField(max_length=64, db_index=True)
+	prompt_text = models.TextField()
+	response_text = models.TextField()
+	model_name = models.CharField(max_length=120, default="gpt-4o-mini")
+	provider = models.CharField(max_length=40, default="openai")
+	cache_hit = models.BooleanField(default=False)
+	response_ms = models.PositiveIntegerField(default=0)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.owner} {self.model_name} {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class APIToken(models.Model):
+	owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_tokens")
+	name = models.CharField(max_length=120, default="default")
+	key = models.CharField(max_length=64, unique=True, db_index=True, default=_generate_api_key)
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.owner} {self.name}"

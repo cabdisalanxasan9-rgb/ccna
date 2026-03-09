@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Dashboard</title>
+    <style>
+        body { margin: 0; font-family: "Poppins", "Trebuchet MS", sans-serif; background: #f4efe6; color: #1d2935; }
+        .wrap { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+        .card { background: #fffaf1; border: 1px solid #d7cbb8; border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; }
+        .stat { background: #fff; border: 1px solid #e1d7c7; border-radius: 8px; padding: 0.6rem; }
+        .muted { color: #667380; font-size: 0.9rem; }
+        a { color: #005f73; text-decoration: none; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; border-bottom: 1px solid #eadfce; padding: 0.45rem; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>Admin Dashboard</h1>
+            <p class="muted">Role-based admin overview for users, labs, and AI usage.</p>
+            <p><a href="/">Back to Builder</a></p>
+        </div>
+
+        <div class="card stats">
+            <div class="stat"><strong>Users</strong><div>{{ stats.users }}</div></div>
+            <div class="stat"><strong>Total Labs</strong><div>{{ stats.labs }}</div></div>
+            <div class="stat"><strong>Labs Today</strong><div>{{ stats.labs_today }}</div></div>
+            <div class="stat"><strong>AI Requests</strong><div>{{ stats.ai_requests }}</div></div>
+            <div class="stat"><strong>AI Cache Hits</strong><div>{{ stats.ai_cache_hits }}</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Activity (Last 7 Days)</h2>
+            <canvas id="activityChart" height="100"></canvas>
+        </div>
+
+        <div class="card">
+            <h2>Protocol Usage</h2>
+            <canvas id="protocolChart" height="120"></canvas>
+        </div>
+
+        <div class="card">
+            <h2>Recent Labs</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Created</th>
+                        <th>User</th>
+                        <th>Name</th>
+                        <th>Protocols</th>
+                        <th>Devices</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lab in recent_labs %}
+                    <tr>
+                        <td>{{ lab.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>{% if lab.owner %}{{ lab.owner.username }}{% else %}n/a{% endif %}</td>
+                        <td>{{ lab.name }}</td>
+                        <td>{{ lab.protocols }}</td>
+                        <td>{{ lab.routers }}R {{ lab.switches }}SW {{ lab.pcs }}PC</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5">No labs yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{ chart_labels|json_script:"chart-labels" }}
+    {{ chart_labs|json_script:"chart-labs" }}
+    {{ chart_ai|json_script:"chart-ai" }}
+    {{ chart_protocol_labels|json_script:"chart-protocol-labels" }}
+    {{ chart_protocol_values|json_script:"chart-protocol-values" }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const labels = JSON.parse(document.getElementById("chart-labels").textContent);
+        const labsData = JSON.parse(document.getElementById("chart-labs").textContent);
+        const aiData = JSON.parse(document.getElementById("chart-ai").textContent);
+        const protocolLabels = JSON.parse(document.getElementById("chart-protocol-labels").textContent);
+        const protocolValues = JSON.parse(document.getElementById("chart-protocol-values").textContent);
+
+        new Chart(document.getElementById("activityChart"), {
+            type: "line",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "Labs",
+                        data: labsData,
+                        borderColor: "#0a9396",
+                        backgroundColor: "rgba(10,147,150,0.2)",
+                        tension: 0.35,
+                    },
+                    {
+                        label: "AI Requests",
+                        data: aiData,
+                        borderColor: "#ca6702",
+                        backgroundColor: "rgba(202,103,2,0.2)",
+                        tension: 0.35,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: "bottom" },
+                },
+            },
+        });
+
+        new Chart(document.getElementById("protocolChart"), {
+            type: "bar",
+            data: {
+                labels: protocolLabels,
+                datasets: [
+                    {
+                        label: "Labs By Protocol",
+                        data: protocolValues,
+                        backgroundColor: ["#0a9396", "#94d2bd", "#ee9b00", "#bb3e03"],
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

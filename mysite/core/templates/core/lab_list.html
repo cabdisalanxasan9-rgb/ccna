@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Saved Labs</title>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --ink: #1d2935;
+            --line: #d7cbb8;
+            --card: #fffaf1;
+            --accent: #005f73;
+        }
+        body {
+            margin: 0;
+            font-family: "Poppins", "Trebuchet MS", sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+        }
+        .wrap { max-width: 960px; margin: 0 auto; padding: 1.2rem; }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        a.btn {
+            text-decoration: none;
+            color: #fff;
+            background: var(--accent);
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            border: 0;
+            cursor: pointer;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 0.9rem;
+            margin-bottom: 0.7rem;
+        }
+        .muted { color: #667380; font-size: 0.9rem; }
+        .links a { margin-right: 0.65rem; color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="top">
+            <h1>Saved Labs</h1>
+            <div>
+                {% if is_admin %}<a class="btn" href="/admin-dashboard/">Admin Dashboard</a>{% endif %}
+                <a class="btn" href="/">Back to Builder</a>
+                <form method="post" action="{% url 'logout' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button class="btn" type="submit">Logout</button>
+                </form>
+            </div>
+        </div>
+
+        {% for lab in labs %}
+            <div class="card">
+                <strong>{{ lab.name }}</strong>
+                <div class="muted">
+                    {{ lab.created_at|date:"Y-m-d H:i" }} | {{ lab.routers }}R {{ lab.switches }}SW {{ lab.pcs }}PC | {{ lab.protocols }}
+                </div>
+                <div class="links">
+                    <a href="{% url 'download_lab' lab.id 'txt' %}">Download TXT</a>
+                    <a href="{% url 'download_lab' lab.id 'json' %}">Download JSON</a>
+                    <a href="{% url 'download_lab' lab.id 'pdf' %}">Download PDF</a>
+                </div>
+            </div>
+        {% empty %}
+            <p>No labs saved yet. Generate one from the builder page.</p>
+        {% endfor %}
+    </div>
+</body>
+</html>

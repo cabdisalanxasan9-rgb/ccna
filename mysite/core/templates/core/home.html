@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Network Lab Builder</title>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --ink: #17202a;
+            --muted: #5f6f7e;
+            --card: #fffaf2;
+            --line: #dbcfbf;
+            --accent: #005f73;
+            --accent-2: #ca6702;
+            --success: #2a9d8f;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            color: var(--ink);
+            font-family: "Poppins", "Trebuchet MS", sans-serif;
+            background:
+                radial-gradient(circle at 5% 10%, #eed6af 0, #eed6af55 18%, transparent 45%),
+                radial-gradient(circle at 95% 20%, #94d2bd 0, #94d2bd66 12%, transparent 40%),
+                var(--bg);
+        }
+
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.2rem;
+        }
+
+        .hero {
+            border: 1px solid var(--line);
+            background: linear-gradient(125deg, #fff8e7 0%, #fef5df 50%, #f6f8f9 100%);
+            border-radius: 16px;
+            padding: 1.4rem;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            margin: 0;
+            font-family: "Space Grotesk", "Poppins", sans-serif;
+            letter-spacing: 0.3px;
+        }
+
+        .sub { color: var(--muted); margin-top: 0.55rem; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        @media (min-width: 900px) {
+            .grid { grid-template-columns: 360px 1fr; }
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 1rem;
+        }
+
+        .panel h2 {
+            margin-top: 0;
+            font-size: 1.05rem;
+            font-family: "Space Grotesk", "Poppins", sans-serif;
+        }
+
+        .row { display: grid; gap: 0.6rem; margin-bottom: 0.8rem; }
+        .split { display: grid; gap: 0.6rem; grid-template-columns: 1fr 1fr; }
+
+        label {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 0.6rem 0.7rem;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .checks {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.4rem;
+        }
+
+        .checks label {
+            text-transform: none;
+            letter-spacing: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--ink);
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 0.7rem 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-main {
+            background: var(--accent);
+            color: #fff;
+            width: 100%;
+        }
+
+        .btn-ghost {
+            background: #fff;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            text-decoration: none;
+            display: inline-block;
+            padding: 0.45rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.88rem;
+        }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+        .chip {
+            background: #e8f3f5;
+            border: 1px solid #bdd8de;
+            color: #0e4d5a;
+            border-radius: 999px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.75rem;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.9rem;
+        }
+
+        @media (min-width: 900px) {
+            .result-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        pre {
+            background: #132026;
+            color: #e9fbff;
+            padding: 0.8rem;
+            border-radius: 10px;
+            overflow: auto;
+            max-height: 320px;
+            font-size: 0.8rem;
+        }
+
+        ul { margin: 0.5rem 0; padding-left: 1.1rem; }
+        .small { color: var(--muted); font-size: 0.84rem; }
+
+        .recent a { color: var(--accent); text-decoration: none; }
+        .recent li { margin-bottom: 0.35rem; }
+
+        .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <section class="hero">
+            <h1>AI Network Lab Builder</h1>
+            <p class="sub">Create topology, generate Cisco CLI, get verification steps, learning notes, subnet planning, and downloadable lab files.</p>
+        </section>
+
+        <div class="grid">
+            <section class="panel">
+                <h2>Lab Creation Page</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <label for="name">Lab Name</label>
+                        <input id="name" name="name" type="text" value="{{ form_data.name }}">
+                    </div>
+
+                    <div class="split row">
+                        <div>
+                            <label for="routers">Routers</label>
+                            <input id="routers" name="routers" type="number" min="1" max="6" value="{{ form_data.routers }}">
+                        </div>
+                        <div>
+                            <label for="switches">Switches</label>
+                            <input id="switches" name="switches" type="number" min="1" max="6" value="{{ form_data.switches }}">
+                        </div>
+                    </div>
+
+                    <div class="split row">
+                        <div>
+                            <label for="pcs">PCs</label>
+                            <input id="pcs" name="pcs" type="number" min="2" max="32" value="{{ form_data.pcs }}">
+                        </div>
+                        <div>
+                            <label for="vlan_count">VLAN Count</label>
+                            <input id="vlan_count" name="vlan_count" type="number" min="1" max="20" value="{{ form_data.vlan_count }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <label for="ip_scheme">IP Addressing Scheme</label>
+                        <input id="ip_scheme" name="ip_scheme" type="text" value="{{ form_data.ip_scheme }}" placeholder="192.168.0.0/16">
+                    </div>
+
+                    <div class="row">
+                        <label for="difficulty">Difficulty</label>
+                        <select id="difficulty" name="difficulty">
+                            <option value="beginner" {% if form_data.difficulty == 'beginner' %}selected{% endif %}>Beginner</option>
+                            <option value="intermediate" {% if form_data.difficulty == 'intermediate' %}selected{% endif %}>Intermediate</option>
+                            <option value="advanced" {% if form_data.difficulty == 'advanced' %}selected{% endif %}>Advanced</option>
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <label>Protocols and Features</label>
+                        <div class="checks">
+                            <label><input type="checkbox" name="protocols" value="OSPF" {% if 'OSPF' in form_data.protocols %}checked{% endif %}> OSPF</label>
+                            <label><input type="checkbox" name="protocols" value="RIP" {% if 'RIP' in form_data.protocols %}checked{% endif %}> RIP</label>
+                            <label><input type="checkbox" name="protocols" value="EIGRP" {% if 'EIGRP' in form_data.protocols %}checked{% endif %}> EIGRP</label>
+                            <label><input type="checkbox" name="protocols" value="STATIC" {% if 'STATIC' in form_data.protocols %}checked{% endif %}> Static</label>
+                            <label><input type="checkbox" name="protocols" value="VLAN" {% if 'VLAN' in form_data.protocols %}checked{% endif %}> VLAN</label>
+                            <label><input type="checkbox" name="protocols" value="NAT" {% if 'NAT' in form_data.protocols %}checked{% endif %}> NAT</label>
+                            <label><input type="checkbox" name="protocols" value="PORT-SECURITY" {% if 'PORT-SECURITY' in form_data.protocols %}checked{% endif %}> Port Security</label>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-main" type="submit">Generate Lab</button>
+                </form>
+
+                <div class="row recent" style="margin-top: 1rem;">
+                    <h2>Lab List</h2>
+                    <a class="btn-ghost" href="{% url 'lab_list' %}">Open Full Lab List</a>
+                    <a class="btn-ghost" href="{% url 'error_analyzer' %}">Open Error Analyzer</a>
+                    <a class="btn-ghost" href="{% url 'topology_builder' %}">Open Topology Builder</a>
+                    <a class="btn-ghost" href="{% url 'ai_assistant' %}">Open AI Assistant</a>
+                    {% if is_admin %}<a class="btn-ghost" href="{% url 'admin_dashboard' %}">Open Admin Dashboard</a>{% endif %}
+                    <form method="post" action="{% url 'logout' %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button class="btn-ghost" type="submit">Logout</button>
+                    </form>
+                    <ul>
+                        {% for lab in latest_labs %}
+                            <li>
+                                {{ lab.name }}
+                                <span class="small">({{ lab.created_at|date:"Y-m-d H:i" }})</span>
+                                <a href="{% url 'download_lab' lab.id 'txt' %}">TXT</a>
+                                <a href="{% url 'download_lab' lab.id 'json' %}">JSON</a>
+                                <a href="{% url 'download_lab' lab.id 'pdf' %}">PDF</a>
+                            </li>
+                        {% empty %}
+                            <li class="small">No labs generated yet.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>Generated Output</h2>
+                {% if generated %}
+                    <div class="actions">
+                        <a class="btn-ghost" href="{% url 'download_lab' generated.id 'txt' %}">Download TXT</a>
+                        <a class="btn-ghost" href="{% url 'download_lab' generated.id 'json' %}">Download JSON</a>
+                        <a class="btn-ghost" href="{% url 'download_lab' generated.id 'pdf' %}">Download PDF</a>
+                    </div>
+
+                    <div class="result-grid" style="margin-top: 0.8rem;">
+                        <div>
+                            <h3>Topology Preview (Text)</h3>
+                            <pre>{{ generated.topology_text }}</pre>
+                        </div>
+                        <div>
+                            <h3>Simple Diagram</h3>
+                            <pre>{{ generated.topology_diagram }}</pre>
+                            <h3>Mermaid Topology</h3>
+                            <pre>{{ generated.mermaid_topology }}</pre>
+                            <div class="mermaid">
+{{ generated.mermaid_topology }}
+                            </div>
+                        </div>
+                        <div>
+                            <h3>CLI Config Generator</h3>
+                            <pre>{{ generated.cli_config }}</pre>
+                        </div>
+                        <div>
+                            <h3>VLAN / Subnet Planner</h3>
+                            <pre>{{ generated.subnet_plan }}</pre>
+                        </div>
+                        <div>
+                            <h3>Simulation and Testing</h3>
+                            <pre>{{ generated.verification_steps }}</pre>
+                            <h3>Troubleshooting Guide</h3>
+                            <pre>{{ generated.troubleshooting_guide }}</pre>
+                        </div>
+                        <div>
+                            <h3>Learning Explanations</h3>
+                            <pre>{{ generated.learning_notes }}</pre>
+                            <h3>Dynamic Lab Suggestions</h3>
+                            <ul>
+                                {% for item in generated.suggestions %}
+                                    <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <h3>Practice Quiz (Optional)</h3>
+                    <ul>
+                        {% for item in generated.quiz %}
+                            <li>
+                                <strong>Q:</strong> {{ item.question }}<br>
+                                <span class="small"><strong>A:</strong> {{ item.answer }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="small">Fill the form and click <strong>Generate Lab</strong> to create your topology, configuration, tests, notes, and downloadable files.</p>
+                    <div class="chips">
+                        <span class="chip">Topology Generator</span>
+                        <span class="chip">Automatic Config Generator</span>
+                        <span class="chip">Simulation and Testing</span>
+                        <span class="chip">Dynamic Lab Suggestions</span>
+                        <span class="chip">Learning Explanations</span>
+                        <span class="chip">VLAN / Subnet Planner</span>
+                        <span class="chip">Download JSON / TXT</span>
+                        <span class="chip">Practice Quiz</span>
+                    </div>
+                {% endif %}
+            </section>
+        </div>
+    </div>
+</body>
+<script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'base' });
+</script>
+</html>

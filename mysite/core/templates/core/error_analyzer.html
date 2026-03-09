@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cisco Error Analyzer</title>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --ink: #1d2935;
+            --line: #d7cbb8;
+            --card: #fffaf1;
+            --accent: #005f73;
+        }
+        body {
+            margin: 0;
+            font-family: "Poppins", "Trebuchet MS", sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+        }
+        .wrap { max-width: 1000px; margin: 0 auto; padding: 1.2rem; }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        @media (min-width: 900px) {
+            .grid { grid-template-columns: 1fr 1fr; }
+        }
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 0.7rem;
+            font-family: Consolas, monospace;
+            font-size: 0.85rem;
+        }
+        .btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 0.65rem 0.9rem;
+            font-weight: 600;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
+        }
+        a { color: var(--accent); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="panel">
+            <h1>Cisco Error Analyzer</h1>
+            <p>Paste router/switch error output and running config to get quick diagnosis and fix suggestions.</p>
+            <p><a href="/">Back to Lab Builder</a></p>
+        </div>
+
+        <div class="grid">
+            <div class="panel">
+                <form method="post">
+                    {% csrf_token %}
+                    <label for="error_output">Error Output</label>
+                    <textarea id="error_output" name="error_output" placeholder="Paste error output here...">{{ input_text }}</textarea>
+                    <label for="config_output">Config Audit (Optional)</label>
+                    <textarea id="config_output" name="config_output" placeholder="Paste running-config here...">{{ config_text }}</textarea>
+                    <p><button type="submit" class="btn">Analyze</button></p>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h2>Error Pattern Suggestions</h2>
+                {% if error_analysis %}
+                    <ul>
+                        {% for item in error_analysis %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No error-output analysis yet.</p>
+                {% endif %}
+
+                <h2>Config Audit Suggestions</h2>
+                {% if config_analysis %}
+                    <ul>
+                        {% for item in config_analysis %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No config-audit analysis yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

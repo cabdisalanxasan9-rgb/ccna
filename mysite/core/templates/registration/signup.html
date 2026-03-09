@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign Up</title>
+    <style>
+        body { margin: 0; font-family: "Poppins", "Trebuchet MS", sans-serif; background: #f4efe6; color: #1d2935; }
+        .wrap { max-width: 420px; margin: 8vh auto; background: #fffaf1; border: 1px solid #d7cbb8; border-radius: 12px; padding: 1rem; }
+        label { display: block; margin-bottom: 0.3rem; font-size: 0.85rem; color: #5f6f7e; }
+        input { width: 100%; padding: 0.55rem; margin-bottom: 0.8rem; border: 1px solid #d7cbb8; border-radius: 8px; }
+        button { border: 0; background: #005f73; color: #fff; padding: 0.6rem 0.9rem; border-radius: 8px; cursor: pointer; }
+        .err { color: #9b2226; margin-bottom: 0.7rem; }
+        ul { margin: 0.4rem 0 0.8rem; padding-left: 1rem; color: #9b2226; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Create account</h1>
+        <form method="post" action="{% url 'signup' %}">
+            {% csrf_token %}
+
+            <label for="id_username">Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}<ul>{% for err in form.username.errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+
+            <label for="id_email">Email</label>
+            {{ form.email }}
+            {% if form.email.errors %}<ul>{% for err in form.email.errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+
+            <label for="id_password1">Password</label>
+            {{ form.password1 }}
+            {% if form.password1.errors %}<ul>{% for err in form.password1.errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+
+            <label for="id_password2">Confirm Password</label>
+            {{ form.password2 }}
+            {% if form.password2.errors %}<ul>{% for err in form.password2.errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+
+            {% if form.non_field_errors %}<ul>{% for err in form.non_field_errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+
+            <button type="submit">Sign Up</button>
+        </form>
+
+        <p style="margin-top: 0.9rem; color: #5f6f7e;">
+            Already have an account? <a href="{% url 'login' %}">Sign in</a>
+        </p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,1171 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Interactive Topology Builder</title>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --ink: #1f2a36;
+            --line: #d8cab5;
+            --panel: #fffaf1;
+            --accent: #005f73;
+            --accent-2: #ca6702;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Poppins", "Trebuchet MS", sans-serif;
+            background:
+                radial-gradient(circle at 5% 10%, #e9d7b8 0, #e9d7b850 18%, transparent 45%),
+                radial-gradient(circle at 95% 20%, #b7ddd3 0, #b7ddd366 12%, transparent 40%),
+                var(--bg);
+            color: var(--ink);
+        }
+        .wrap { max-width: 1280px; margin: 0 auto; padding: 1rem; }
+        .header {
+            background: linear-gradient(125deg, #fff8e7 0%, #fef5df 55%, #eef7f5 100%);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 1rem;
+            margin-bottom: 0.9rem;
+        }
+        .header h1 { margin: 0; font-family: "Space Grotesk", "Poppins", sans-serif; }
+        .header a { color: var(--accent); text-decoration: none; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        @media (min-width: 1000px) {
+            .layout { grid-template-columns: 320px 1fr; }
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 0.9rem;
+        }
+
+        .palette { display: grid; gap: 0.6rem; }
+        .tool {
+            border: 1px dashed var(--line);
+            background: #fff;
+            border-radius: 10px;
+            padding: 0.6rem;
+            cursor: grab;
+            user-select: none;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        #canvas {
+            position: relative;
+            min-height: 560px;
+            background: linear-gradient(180deg, #f9f3e7, #fffdf8);
+            border: 2px dashed #cdbda5;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #canvas.snap-on {
+            background:
+                linear-gradient(90deg, rgba(53, 94, 122, 0.08) 1px, transparent 1px),
+                linear-gradient(rgba(53, 94, 122, 0.08) 1px, transparent 1px),
+                linear-gradient(180deg, #f9f3e7, #fffdf8);
+            background-size: 20px 20px, 20px 20px, auto;
+        }
+
+        .link-layer {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .link-line {
+            stroke: #355e7a;
+            stroke-width: 2;
+            pointer-events: stroke;
+            cursor: pointer;
+        }
+
+        .link-line.selected {
+            stroke: #9b2226;
+            stroke-width: 3;
+        }
+
+        .link-label {
+            font-size: 11px;
+            fill: #2d3a45;
+            font-weight: 700;
+            text-anchor: middle;
+            dominant-baseline: central;
+            paint-order: stroke;
+            stroke: #fffdf8;
+            stroke-width: 3px;
+        }
+
+        .node {
+            position: absolute;
+            width: 110px;
+            padding: 0.45rem 0.4rem;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 1px solid;
+            cursor: move;
+            user-select: none;
+            background: #fff;
+            z-index: 2;
+        }
+
+        .node.link-selected {
+            outline: 3px solid #9b2226;
+        }
+
+        .router { border-color: #176087; background: #dff2ff; }
+        .switch { border-color: #3b7f3f; background: #e7f9e7; }
+        .pc { border-color: #9c5d16; background: #fff1df; }
+        .firewall { border-color: #7f1d1d; background: #ffe7e7; }
+
+        .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+        .btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 0.55rem 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-main { background: var(--accent); color: #fff; }
+        .btn-warn { background: var(--accent-2); color: #fff; }
+        textarea {
+            width: 100%;
+            min-height: 160px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 0.6rem;
+            font-family: Consolas, monospace;
+            margin-top: 0.7rem;
+        }
+        .hint { font-size: 0.86rem; color: #5f6f7e; }
+        .hint.active { color: #9b2226; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="header">
+            <h1>Interactive Topology Builder</h1>
+            <p class="hint">Drag device cards into workspace, move them around, then export JSON layout.</p>
+            <p id="linkHint" class="hint">Link Mode: OFF</p>
+            <p class="hint">Tip: Select a link and press Delete/Backspace to remove it.</p>
+            <p class="hint">Tip: Double-click a node to rename it. Shift + double-click to delete node.</p>
+            <p class="hint">Tip: Ctrl+Z = Undo, Ctrl+Y (or Ctrl+Shift+Z) = Redo.</p>
+            <p id="snapHint" class="hint">Snap to Grid: OFF</p>
+            <p class="hint">Tip: Use Auto Arrange to organize routers/switches/firewalls/PCs in rows.</p>
+            <p class="hint">Tip: Use Auto Connect to generate common links automatically.</p>
+            <p class="hint">Tip: Use Generate CLI to create starter Cisco commands from your topology.</p>
+            <p class="hint">Tip: Copy CLI or Download CLI (.txt) after generating commands.</p>
+            <p class="hint">Tip: Copy JSON or Download JSON after export.</p>
+            <p class="hint">Tip: Paste external CLI and run Analyze CLI to get quick warnings.</p>
+            <p class="hint">Severity: HIGH = likely outage risk, MEDIUM = config risk, LOW = best-practice warning.</p>
+            <p><a href="/">Back to Lab Builder</a></p>
+        </div>
+
+        <div class="layout">
+            <aside class="panel">
+                <h2>Device Palette</h2>
+                <div class="palette">
+                    <div class="tool" draggable="true" data-type="router">Router</div>
+                    <div class="tool" draggable="true" data-type="switch">Switch</div>
+                    <div class="tool" draggable="true" data-type="pc">PC</div>
+                    <div class="tool" draggable="true" data-type="firewall">Firewall</div>
+                </div>
+                <div class="controls">
+                    <button id="exportBtn" class="btn btn-main" type="button">Export JSON</button>
+                    <button id="importBtn" class="btn btn-main" type="button">Import JSON</button>
+                    <button id="copyJsonBtn" class="btn btn-main" type="button">Copy JSON</button>
+                    <button id="downloadJsonBtn" class="btn btn-main" type="button">Download JSON</button>
+                    <button id="linkModeBtn" class="btn btn-main" type="button">Link Mode</button>
+                    <button id="snapGridBtn" class="btn btn-main" type="button">Snap to Grid</button>
+                    <button id="autoArrangeBtn" class="btn btn-main" type="button">Auto Arrange</button>
+                    <button id="autoConnectBtn" class="btn btn-main" type="button">Auto Connect</button>
+                    <button id="generateCliBtn" class="btn btn-main" type="button">Generate CLI</button>
+                    <button id="copyCliBtn" class="btn btn-main" type="button">Copy CLI</button>
+                    <button id="downloadCliBtn" class="btn btn-main" type="button">Download CLI</button>
+                    <button id="analyzeCliBtn" class="btn btn-main" type="button">Analyze CLI</button>
+                    <button id="parseCliBtn" class="btn btn-main" type="button">Parse CLI to Topology</button>
+                    <button id="removeLinkBtn" class="btn btn-main" type="button">Remove Last Link</button>
+                    <button id="removeSelectedLinkBtn" class="btn btn-main" type="button">Remove Selected Link</button>
+                    <button id="editLinkLabelBtn" class="btn btn-main" type="button">Edit Last Link Label</button>
+                    <button id="undoBtn" class="btn btn-main" type="button">Undo</button>
+                    <button id="redoBtn" class="btn btn-main" type="button">Redo</button>
+                    <button id="saveBtn" class="btn btn-main" type="button">Save Local</button>
+                    <button id="loadBtn" class="btn btn-main" type="button">Load Local</button>
+                    <button id="clearBtn" class="btn btn-warn" type="button">Clear</button>
+                </div>
+                <textarea id="jsonOut" placeholder="Exported topology JSON appears here..."></textarea>
+                <textarea id="cliOut" placeholder="Generated CLI commands appear here..."></textarea>
+                <textarea id="cliAnalyzeIn" placeholder="Paste imported CLI here for quick analysis..."></textarea>
+                <label for="severityFilter" class="hint">Severity Filter</label>
+                <select id="severityFilter">
+                    <option value="ALL">ALL</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="LOW">LOW</option>
+                </select>
+                <p id="severitySummary" class="hint">HIGH: 0 | MEDIUM: 0 | LOW: 0</p>
+                <textarea id="cliAnalyzeOut" placeholder="CLI analysis suggestions appear here..." readonly></textarea>
+            </aside>
+
+            <section class="panel">
+                <h2>Workspace</h2>
+                <div id="canvas">
+                    <svg id="linkLayer" class="link-layer"></svg>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const linkLayer = document.getElementById('linkLayer');
+        const jsonOut = document.getElementById('jsonOut');
+        const cliOut = document.getElementById('cliOut');
+        const cliAnalyzeIn = document.getElementById('cliAnalyzeIn');
+        const cliAnalyzeOut = document.getElementById('cliAnalyzeOut');
+        const severityFilter = document.getElementById('severityFilter');
+        const severitySummary = document.getElementById('severitySummary');
+        const linkHint = document.getElementById('linkHint');
+        const snapHint = document.getElementById('snapHint');
+        const counters = { router: 0, switch: 0, pc: 0, firewall: 0 };
+        const links = [];
+        const gridSize = 20;
+
+        let dragNode = null;
+        let offsetX = 0;
+        let offsetY = 0;
+        let linkMode = false;
+        let pendingLinkNode = null;
+        let selectedLinkIndex = -1;
+        let historyStack = [];
+        let historyIndex = -1;
+        let applyingHistory = false;
+        let snapToGrid = false;
+
+        document.querySelectorAll('.tool').forEach((tool) => {
+            tool.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('device-type', tool.dataset.type);
+            });
+        });
+
+        canvas.addEventListener('dragover', (e) => e.preventDefault());
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('device-type');
+            if (!type) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = adjustCoord(e.clientX - rect.left - 55, rect.width - 110);
+            const y = adjustCoord(e.clientY - rect.top - 20, rect.height - 40);
+            createNode(type, null, null, x, y);
+            commitHistory();
+        });
+
+        function adjustCoord(value, maxValue) {
+            let next = value;
+            if (snapToGrid) {
+                next = Math.round(next / gridSize) * gridSize;
+            }
+            return Math.max(0, Math.min(maxValue, next));
+        }
+
+        function updateSnapUi() {
+            snapHint.textContent = `Snap to Grid: ${snapToGrid ? 'ON' : 'OFF'}`;
+            snapHint.classList.toggle('active', snapToGrid);
+            canvas.classList.toggle('snap-on', snapToGrid);
+        }
+
+        function autoArrangeNodes() {
+            const rect = canvas.getBoundingClientRect();
+            const allNodes = [...canvas.querySelectorAll('.node')];
+            if (!allNodes.length) {
+                alert('No nodes to arrange.');
+                return;
+            }
+
+            const rows = [
+                { type: 'router', y: 40 },
+                { type: 'switch', y: 160 },
+                { type: 'firewall', y: 280 },
+                { type: 'pc', y: 400 },
+            ];
+
+            rows.forEach((row) => {
+                const rowNodes = allNodes.filter((node) => node.dataset.type === row.type);
+                if (!rowNodes.length) {
+                    return;
+                }
+
+                const availableWidth = Math.max(120, rect.width - 140);
+                const spacing = Math.max(120, Math.floor(availableWidth / rowNodes.length));
+
+                rowNodes.forEach((node, index) => {
+                    let x = 20 + index * spacing;
+                    let y = row.y;
+                    x = adjustCoord(x, rect.width - 110);
+                    y = adjustCoord(y, rect.height - 40);
+                    node.style.left = `${x}px`;
+                    node.style.top = `${y}px`;
+                });
+            });
+
+            redrawLinks();
+            commitHistory();
+        }
+
+        function upsertLink(fromId, toId, label) {
+            if (!fromId || !toId || fromId === toId) {
+                return;
+            }
+            const existing = links.find((link) =>
+                (link.from === fromId && link.to === toId) || (link.from === toId && link.to === fromId)
+            );
+            if (existing) {
+                if (!existing.label && label) {
+                    existing.label = label;
+                }
+                return;
+            }
+            links.push({ from: fromId, to: toId, label: label || '' });
+        }
+
+        function autoConnectNodes() {
+            const routers = [...canvas.querySelectorAll('.node.router')];
+            const switches = [...canvas.querySelectorAll('.node.switch')];
+            const pcs = [...canvas.querySelectorAll('.node.pc')];
+            const firewalls = [...canvas.querySelectorAll('.node.firewall')];
+
+            const total = routers.length + switches.length + pcs.length + firewalls.length;
+            if (total < 2) {
+                alert('Need at least two devices to auto connect.');
+                return;
+            }
+
+            for (let i = 0; i < routers.length - 1; i++) {
+                const a = routers[i];
+                const b = routers[i + 1];
+                upsertLink(a.dataset.id, b.dataset.id, `${a.dataset.label} g0/1 <-> ${b.dataset.label} g0/1`);
+            }
+
+            switches.forEach((sw, index) => {
+                const targetRouter = routers.length ? routers[Math.min(index, routers.length - 1)] : null;
+                if (targetRouter) {
+                    upsertLink(targetRouter.dataset.id, sw.dataset.id, `${targetRouter.dataset.label} g0/0 <-> ${sw.dataset.label} g0/1`);
+                }
+            });
+
+            pcs.forEach((pc, index) => {
+                const targetSwitch = switches.length ? switches[index % switches.length] : null;
+                if (targetSwitch) {
+                    const accessPort = `fa0/${(index % 20) + 2}`;
+                    upsertLink(pc.dataset.id, targetSwitch.dataset.id, `${pc.dataset.label} fa0 <-> ${targetSwitch.dataset.label} ${accessPort}`);
+                } else if (routers.length) {
+                    const targetRouter = routers[index % routers.length];
+                    upsertLink(pc.dataset.id, targetRouter.dataset.id, `${pc.dataset.label} fa0 <-> ${targetRouter.dataset.label} g0/0`);
+                }
+            });
+
+            firewalls.forEach((fw, index) => {
+                if (routers.length) {
+                    const targetRouter = routers[Math.min(index, routers.length - 1)];
+                    upsertLink(fw.dataset.id, targetRouter.dataset.id, `${fw.dataset.label} outside <-> ${targetRouter.dataset.label} g0/2`);
+                } else if (switches.length) {
+                    const targetSwitch = switches[Math.min(index, switches.length - 1)];
+                    upsertLink(fw.dataset.id, targetSwitch.dataset.id, `${fw.dataset.label} outside <-> ${targetSwitch.dataset.label} g0/1`);
+                }
+            });
+
+            redrawLinks();
+            commitHistory();
+        }
+
+        function buildCliFromCurrentTopology() {
+            const state = getCurrentState();
+            const nodes = state.topology || [];
+            const topologyLinks = state.links || [];
+
+            const routers = nodes.filter((n) => n.type === 'router');
+            const switches = nodes.filter((n) => n.type === 'switch');
+            const firewalls = nodes.filter((n) => n.type === 'firewall');
+
+            const lines = [];
+            lines.push('! Auto-generated starter config from topology builder');
+            lines.push('! Review and adjust interface names/IP plan for your Packet Tracer device model.');
+            lines.push('');
+
+            const routerIndexById = {};
+            routers.forEach((r, idx) => {
+                routerIndexById[r.id] = idx + 1;
+            });
+
+            let p2pIndex = 1;
+            const routerLinkIp = {};
+            topologyLinks.forEach((link) => {
+                const a = nodes.find((n) => n.id === link.from);
+                const b = nodes.find((n) => n.id === link.to);
+                if (!a || !b) return;
+                if (a.type === 'router' && b.type === 'router') {
+                    const keyA = `${a.id}:${b.id}`;
+                    const keyB = `${b.id}:${a.id}`;
+                    if (routerLinkIp[keyA] || routerLinkIp[keyB]) return;
+
+                    routerLinkIp[keyA] = `10.10.${p2pIndex}.1 255.255.255.252`;
+                    routerLinkIp[keyB] = `10.10.${p2pIndex}.2 255.255.255.252`;
+                    p2pIndex += 1;
+                }
+            });
+
+            routers.forEach((router, idx) => {
+                const rid = idx + 1;
+                const lanIp = `192.168.${rid}.1 255.255.255.0`;
+                lines.push(`! ${router.label}`);
+                lines.push('enable');
+                lines.push('configure terminal');
+                lines.push(`hostname ${router.label.replace(/\s+/g, '_')}`);
+                lines.push('no ip domain-lookup');
+                lines.push('interface g0/0');
+                lines.push(` ip address ${lanIp}`);
+                lines.push(' no shutdown');
+                lines.push('exit');
+
+                let p2pPort = 1;
+                topologyLinks.forEach((link) => {
+                    const peerId = link.from === router.id ? link.to : (link.to === router.id ? link.from : null);
+                    if (!peerId) return;
+                    const peer = nodes.find((n) => n.id === peerId);
+                    if (!peer || peer.type !== 'router') return;
+                    const ip = routerLinkIp[`${router.id}:${peer.id}`];
+                    if (!ip) return;
+                    lines.push(`interface g0/${p2pPort}`);
+                    lines.push(` ip address ${ip}`);
+                    lines.push(' no shutdown');
+                    lines.push('exit');
+                    p2pPort += 1;
+                });
+
+                lines.push('router ospf 1');
+                lines.push(` router-id ${rid}.${rid}.${rid}.${rid}`);
+                lines.push(` network 192.168.${rid}.0 0.0.0.255 area 0`);
+
+                topologyLinks.forEach((link) => {
+                    const peerId = link.from === router.id ? link.to : (link.to === router.id ? link.from : null);
+                    if (!peerId) return;
+                    const peer = nodes.find((n) => n.id === peerId);
+                    if (!peer || peer.type !== 'router') return;
+                    const routerPeerId = routerIndexById[peer.id];
+                    const minIdx = Math.min(rid, routerPeerId);
+                    lines.push(` network 10.10.${minIdx}.0 0.0.0.3 area 0`);
+                });
+
+                lines.push('exit');
+                lines.push('end');
+                lines.push('write memory');
+                lines.push('');
+            });
+
+            switches.forEach((sw) => {
+                lines.push(`! ${sw.label}`);
+                lines.push('enable');
+                lines.push('configure terminal');
+                lines.push(`hostname ${sw.label.replace(/\s+/g, '_')}`);
+                lines.push('no ip domain-lookup');
+                lines.push('interface range fa0/2-24');
+                lines.push(' switchport mode access');
+                lines.push(' spanning-tree portfast');
+                lines.push('exit');
+                lines.push('end');
+                lines.push('write memory');
+                lines.push('');
+            });
+
+            firewalls.forEach((fw) => {
+                lines.push(`! ${fw.label}`);
+                lines.push('! Firewall placeholder: configure according to platform (ASA/IOS Zone-Based).');
+                lines.push('');
+            });
+
+            if (topologyLinks.length) {
+                lines.push('! Topology links reference');
+                topologyLinks.forEach((link) => {
+                    const a = nodes.find((n) => n.id === link.from);
+                    const b = nodes.find((n) => n.id === link.to);
+                    if (!a || !b) return;
+                    lines.push(`! ${a.label} <-> ${b.label} | ${link.label || 'no-label'}`);
+                });
+            }
+
+            return lines.join('\n');
+        }
+
+        function analyzeCliText(rawText) {
+            const text = (rawText || '').toLowerCase();
+            const findings = [];
+
+            if (!text.trim()) {
+                return [{ severity: 'LOW', message: 'No CLI input found. Paste running-config or startup-config output first.' }];
+            }
+
+            if (text.includes('interface') && !text.includes('no shutdown')) {
+                findings.push({ severity: 'HIGH', message: "Interfaces found but no 'no shutdown' detected." });
+            }
+            if (text.includes('router ospf') && !text.includes(' network ')) {
+                findings.push({ severity: 'HIGH', message: 'OSPF process exists but network statements are missing.' });
+            }
+            if (text.includes('router rip') && !text.includes('version 2')) {
+                findings.push({ severity: 'MEDIUM', message: "RIP configured without 'version 2'." });
+            }
+            if (text.includes('router eigrp') && !text.includes('no auto-summary')) {
+                findings.push({ severity: 'MEDIUM', message: "EIGRP configured without 'no auto-summary'." });
+            }
+            if (text.includes('switchport mode trunk') && !text.includes('allowed vlan')) {
+                findings.push({ severity: 'LOW', message: 'Trunk configured but allowed VLAN list not explicitly set.' });
+            }
+            if (text.includes('ip nat inside source') && (!text.includes('ip nat inside') || !text.includes('ip nat outside'))) {
+                findings.push({ severity: 'HIGH', message: 'NAT source exists but inside/outside interface roles seem incomplete.' });
+            }
+            if (text.includes('access-list') && text.includes('deny') && !text.includes('permit ip any any')) {
+                findings.push({ severity: 'MEDIUM', message: 'ACL has deny rules but no broad permit; traffic may be over-blocked.' });
+            }
+
+            if (!findings.length) {
+                findings.push({ severity: 'LOW', message: 'No common high-risk pattern detected. Verify with show commands and ping tests.' });
+            }
+            return findings;
+        }
+
+        function inferTypeFromName(name) {
+            const key = (name || '').toLowerCase();
+            if (key.startsWith('sw')) return 'switch';
+            if (key.startsWith('pc')) return 'pc';
+            if (key.startsWith('fw') || key.includes('firewall')) return 'firewall';
+            return 'router';
+        }
+
+        function parseCliToTopology(rawText) {
+            const text = (rawText || '').trim();
+            if (!text) {
+                return null;
+            }
+
+            const lines = text.split(/\r?\n/);
+            const names = [];
+            const linksParsed = [];
+
+            lines.forEach((line) => {
+                const hostMatch = line.match(/^\s*hostname\s+([^\s]+)\s*$/i);
+                if (hostMatch) {
+                    names.push(hostMatch[1]);
+                }
+                const linkMatch = line.match(/^\s*!\s*(.+?)\s*<->\s*(.+?)\s*\|\s*(.+)\s*$/);
+                if (linkMatch) {
+                    linksParsed.push({
+                        a: linkMatch[1].trim(),
+                        b: linkMatch[2].trim(),
+                        label: linkMatch[3].trim(),
+                    });
+                }
+            });
+
+            const nameSet = new Set(names);
+            linksParsed.forEach((item) => {
+                nameSet.add(item.a);
+                nameSet.add(item.b);
+            });
+
+            const nodeNames = [...nameSet];
+            if (!nodeNames.length) {
+                return null;
+            }
+
+            const grouped = {
+                router: nodeNames.filter((n) => inferTypeFromName(n) === 'router'),
+                switch: nodeNames.filter((n) => inferTypeFromName(n) === 'switch'),
+                firewall: nodeNames.filter((n) => inferTypeFromName(n) === 'firewall'),
+                pc: nodeNames.filter((n) => inferTypeFromName(n) === 'pc'),
+            };
+
+            const rows = [
+                { type: 'router', y: 40 },
+                { type: 'switch', y: 160 },
+                { type: 'firewall', y: 280 },
+                { type: 'pc', y: 400 },
+            ];
+
+            const nodes = [];
+            rows.forEach((row) => {
+                const rowNames = grouped[row.type];
+                const spacing = Math.max(120, Math.floor(900 / Math.max(1, rowNames.length)));
+                rowNames.forEach((name, index) => {
+                    nodes.push({
+                        id: `${row.type}-${index + 1}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                        type: row.type,
+                        label: name,
+                        x: 20 + index * spacing,
+                        y: row.y,
+                    });
+                });
+            });
+
+            const idByName = {};
+            nodes.forEach((n) => {
+                idByName[n.label] = n.id;
+            });
+
+            const parsedLinks = [];
+            linksParsed.forEach((item) => {
+                const from = idByName[item.a];
+                const to = idByName[item.b];
+                if (!from || !to) return;
+                parsedLinks.push({ from, to, label: item.label });
+            });
+
+            return {
+                topology: nodes,
+                links: parsedLinks,
+            };
+        }
+
+        function createNode(type, customId, customLabel, x, y) {
+            counters[type] += 1;
+            const node = document.createElement('div');
+            node.className = `node ${type}`;
+            node.dataset.type = type;
+            node.dataset.id = customId || `${type}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+            node.dataset.label = customLabel || `${type.toUpperCase()}-${counters[type]}`;
+            node.textContent = node.dataset.label;
+            node.style.left = `${Math.max(0, parseInt(x || 0, 10))}px`;
+            node.style.top = `${Math.max(0, parseInt(y || 0, 10))}px`;
+
+            enableMove(node);
+            canvas.appendChild(node);
+            redrawLinks();
+            return node;
+        }
+
+        function getCurrentState() {
+            const nodes = [...canvas.querySelectorAll('.node')].map((node) => ({
+                id: node.dataset.id,
+                type: node.dataset.type,
+                label: node.dataset.label,
+                x: parseInt(node.style.left || '0', 10),
+                y: parseInt(node.style.top || '0', 10),
+            }));
+            const linkSnapshot = links.map((item) => ({
+                from: item.from,
+                to: item.to,
+                label: item.label || '',
+            }));
+            return { topology: nodes, links: linkSnapshot };
+        }
+
+        function commitHistory() {
+            if (applyingHistory) return;
+            const snapshot = JSON.stringify(getCurrentState());
+            if (historyIndex >= 0 && historyStack[historyIndex] === snapshot) {
+                return;
+            }
+
+            historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(snapshot);
+            if (historyStack.length > 100) {
+                historyStack.shift();
+            }
+            historyIndex = historyStack.length - 1;
+        }
+
+        function restoreFromHistorySnapshot(snapshot) {
+            applyingHistory = true;
+            try {
+                renderFromPayload(JSON.parse(snapshot), false);
+            } finally {
+                applyingHistory = false;
+            }
+        }
+
+        function undo() {
+            if (historyIndex <= 0) {
+                return false;
+            }
+            historyIndex -= 1;
+            restoreFromHistorySnapshot(historyStack[historyIndex]);
+            return true;
+        }
+
+        function redo() {
+            if (historyIndex >= historyStack.length - 1) {
+                return false;
+            }
+            historyIndex += 1;
+            restoreFromHistorySnapshot(historyStack[historyIndex]);
+            return true;
+        }
+
+        function nodeCenter(node) {
+            return {
+                x: parseInt(node.style.left || '0', 10) + 55,
+                y: parseInt(node.style.top || '0', 10) + 20,
+            };
+        }
+
+        function redrawLinks() {
+            linkLayer.innerHTML = '';
+            links.forEach((link, index) => {
+                const from = canvas.querySelector(`.node[data-id="${link.from}"]`);
+                const to = canvas.querySelector(`.node[data-id="${link.to}"]`);
+                if (!from || !to) return;
+                const a = nodeCenter(from);
+                const b = nodeCenter(to);
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', String(a.x));
+                line.setAttribute('y1', String(a.y));
+                line.setAttribute('x2', String(b.x));
+                line.setAttribute('y2', String(b.y));
+                line.setAttribute('class', 'link-line');
+                if (index === selectedLinkIndex) {
+                    line.classList.add('selected');
+                }
+                line.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    selectedLinkIndex = index;
+                    redrawLinks();
+                });
+                linkLayer.appendChild(line);
+
+                if (link.label) {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', String((a.x + b.x) / 2));
+                    text.setAttribute('y', String((a.y + b.y) / 2 - 8));
+                    text.setAttribute('class', 'link-label');
+                    text.textContent = link.label;
+                    linkLayer.appendChild(text);
+                }
+            });
+        }
+
+        function clearPendingSelection() {
+            pendingLinkNode = null;
+            canvas.querySelectorAll('.node').forEach((n) => n.classList.remove('link-selected'));
+        }
+
+        function clearSelectedLink() {
+            selectedLinkIndex = -1;
+        }
+
+        function deleteSelectedLink() {
+            if (selectedLinkIndex < 0 || selectedLinkIndex >= links.length) {
+                return false;
+            }
+            links.splice(selectedLinkIndex, 1);
+            clearSelectedLink();
+            redrawLinks();
+            return true;
+        }
+
+        function tryCreateLink(nodeA, nodeB) {
+            const a = nodeA.dataset.id;
+            const b = nodeB.dataset.id;
+            if (!a || !b || a === b) return;
+            const exists = links.some((link) =>
+                (link.from === a && link.to === b) || (link.from === b && link.to === a)
+            );
+            if (!exists) {
+                const defaultLabel = `${nodeA.dataset.label} <-> ${nodeB.dataset.label}`;
+                const customLabel = prompt('Link label (example: g0/0 <-> g0/1):', defaultLabel);
+                links.push({ from: a, to: b, label: (customLabel || defaultLabel).trim() });
+                selectedLinkIndex = links.length - 1;
+                redrawLinks();
+                commitHistory();
+            }
+        }
+
+        function toggleLinkMode() {
+            linkMode = !linkMode;
+            clearPendingSelection();
+            linkHint.textContent = `Link Mode: ${linkMode ? 'ON' : 'OFF'}`;
+            linkHint.classList.toggle('active', linkMode);
+        }
+
+        function enableMove(node) {
+            let moved = false;
+
+            node.addEventListener('pointerdown', (e) => {
+                moved = false;
+                if (linkMode) {
+                    e.preventDefault();
+                    if (!pendingLinkNode) {
+                        pendingLinkNode = node;
+                        node.classList.add('link-selected');
+                        return;
+                    }
+
+                    if (pendingLinkNode === node) {
+                        clearPendingSelection();
+                        return;
+                    }
+
+                    tryCreateLink(pendingLinkNode, node);
+                    clearPendingSelection();
+                    return;
+                }
+
+                dragNode = node;
+                const box = node.getBoundingClientRect();
+                offsetX = e.clientX - box.left;
+                offsetY = e.clientY - box.top;
+                node.setPointerCapture(e.pointerId);
+            });
+
+            node.addEventListener('pointermove', (e) => {
+                if (!dragNode || dragNode !== node) return;
+                const rect = canvas.getBoundingClientRect();
+                let x = adjustCoord(e.clientX - rect.left - offsetX, rect.width - 110);
+                let y = adjustCoord(e.clientY - rect.top - offsetY, rect.height - 40);
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                redrawLinks();
+                moved = true;
+            });
+
+            node.addEventListener('pointerup', (e) => {
+                if (dragNode === node) {
+                    node.releasePointerCapture(e.pointerId);
+                    dragNode = null;
+                    if (moved) {
+                        commitHistory();
+                    }
+                }
+            });
+
+            node.addEventListener('dblclick', (event) => {
+                if (event.shiftKey) {
+                    const id = node.dataset.id;
+                    node.remove();
+                    for (let i = links.length - 1; i >= 0; i--) {
+                        if (links[i].from === id || links[i].to === id) {
+                            links.splice(i, 1);
+                        }
+                    }
+                    redrawLinks();
+                    commitHistory();
+                    return;
+                }
+
+                const currentLabel = node.dataset.label || node.textContent || '';
+                const nextLabel = prompt('Rename node label:', currentLabel);
+                if (nextLabel === null) {
+                    return;
+                }
+
+                const cleaned = nextLabel.trim();
+                if (!cleaned) {
+                    return;
+                }
+
+                node.dataset.label = cleaned;
+                node.textContent = cleaned;
+                redrawLinks();
+                commitHistory();
+            });
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            jsonOut.value = JSON.stringify(getCurrentState(), null, 2);
+        });
+
+        document.getElementById('copyJsonBtn').addEventListener('click', async () => {
+            const text = (jsonOut.value || '').trim();
+            if (!text) {
+                alert('Export JSON first.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('JSON copied to clipboard.');
+            } catch (err) {
+                jsonOut.select();
+                document.execCommand('copy');
+                alert('JSON copied (fallback mode).');
+            }
+        });
+
+        document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+            const text = (jsonOut.value || '').trim();
+            if (!text) {
+                alert('Export JSON first.');
+                return;
+            }
+
+            const blob = new Blob([text + '\n'], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'topology_layout.json';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        function renderFromPayload(payload, recordHistory = true) {
+            canvas.querySelectorAll('.node').forEach((node) => node.remove());
+            counters.router = 0;
+            counters.switch = 0;
+            counters.pc = 0;
+            counters.firewall = 0;
+            links.length = 0;
+            clearPendingSelection();
+            clearSelectedLink();
+
+            const nodes = (payload && payload.topology) ? payload.topology : [];
+            nodes.forEach((item) => {
+                const type = (item.type || '').toLowerCase();
+                if (!['router', 'switch', 'pc', 'firewall'].includes(type)) {
+                    return;
+                }
+
+                createNode(type, item.id || null, item.label || null, item.x || 0, item.y || 0);
+            });
+
+            const importedLinks = (payload && payload.links) ? payload.links : [];
+            importedLinks.forEach((item) => {
+                if (!item || !item.from || !item.to) return;
+                const fromExists = canvas.querySelector(`.node[data-id="${item.from}"]`);
+                const toExists = canvas.querySelector(`.node[data-id="${item.to}"]`);
+                if (!fromExists || !toExists) return;
+                links.push({ from: item.from, to: item.to, label: (item.label || '').trim() });
+            });
+            clearSelectedLink();
+            redrawLinks();
+
+            if (recordHistory) {
+                commitHistory();
+            }
+        }
+
+        document.getElementById('importBtn').addEventListener('click', () => {
+            if (!jsonOut.value.trim()) {
+                alert('Paste topology JSON first.');
+                return;
+            }
+            try {
+                const payload = JSON.parse(jsonOut.value);
+                renderFromPayload(payload);
+            } catch (err) {
+                alert('Invalid JSON format.');
+            }
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            if (!jsonOut.value.trim()) {
+                document.getElementById('exportBtn').click();
+            }
+            localStorage.setItem('topology_builder_layout', jsonOut.value);
+            alert('Saved to browser local storage.');
+        });
+
+        document.getElementById('loadBtn').addEventListener('click', () => {
+            const saved = localStorage.getItem('topology_builder_layout');
+            if (!saved) {
+                alert('No saved layout found.');
+                return;
+            }
+            jsonOut.value = saved;
+            try {
+                renderFromPayload(JSON.parse(saved));
+            } catch (err) {
+                alert('Saved JSON is invalid.');
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            canvas.querySelectorAll('.node').forEach((node) => node.remove());
+            links.length = 0;
+            clearPendingSelection();
+            clearSelectedLink();
+            redrawLinks();
+            jsonOut.value = '';
+            commitHistory();
+        });
+
+        document.getElementById('linkModeBtn').addEventListener('click', toggleLinkMode);
+
+        document.getElementById('snapGridBtn').addEventListener('click', () => {
+            snapToGrid = !snapToGrid;
+            updateSnapUi();
+        });
+
+        document.getElementById('autoArrangeBtn').addEventListener('click', autoArrangeNodes);
+        document.getElementById('autoConnectBtn').addEventListener('click', autoConnectNodes);
+        document.getElementById('generateCliBtn').addEventListener('click', () => {
+            cliOut.value = buildCliFromCurrentTopology();
+            cliAnalyzeIn.value = cliOut.value;
+        });
+
+        document.getElementById('copyCliBtn').addEventListener('click', async () => {
+            const text = (cliOut.value || '').trim();
+            if (!text) {
+                alert('Generate CLI first.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('CLI copied to clipboard.');
+            } catch (err) {
+                cliOut.select();
+                document.execCommand('copy');
+                alert('CLI copied (fallback mode).');
+            }
+        });
+
+        document.getElementById('downloadCliBtn').addEventListener('click', () => {
+            const text = (cliOut.value || '').trim();
+            if (!text) {
+                alert('Generate CLI first.');
+                return;
+            }
+
+            const blob = new Blob([text + '\n'], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'topology_cli.txt';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('analyzeCliBtn').addEventListener('click', () => {
+            const findings = analyzeCliText(cliAnalyzeIn.value);
+            const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+            findings.forEach((item) => {
+                if (counts[item.severity] !== undefined) {
+                    counts[item.severity] += 1;
+                }
+            });
+            severitySummary.textContent = `HIGH: ${counts.HIGH} | MEDIUM: ${counts.MEDIUM} | LOW: ${counts.LOW}`;
+
+            const selected = severityFilter.value || 'ALL';
+            const filtered = selected === 'ALL'
+                ? findings
+                : findings.filter((item) => item.severity === selected);
+
+            if (!filtered.length) {
+                cliAnalyzeOut.value = `No findings for severity: ${selected}`;
+                return;
+            }
+
+            cliAnalyzeOut.value = filtered.map((item, idx) => `${idx + 1}. [${item.severity}] ${item.message}`).join('\n');
+        });
+
+        document.getElementById('parseCliBtn').addEventListener('click', () => {
+            const payload = parseCliToTopology(cliAnalyzeIn.value || cliOut.value);
+            if (!payload) {
+                alert('No parseable CLI found. Ensure CLI has hostname lines or link reference comments.');
+                return;
+            }
+            renderFromPayload(payload);
+            jsonOut.value = JSON.stringify(getCurrentState(), null, 2);
+        });
+
+        document.getElementById('removeLinkBtn').addEventListener('click', () => {
+            if (!links.length) {
+                alert('No links to remove.');
+                return;
+            }
+            links.pop();
+            if (selectedLinkIndex >= links.length) {
+                clearSelectedLink();
+            }
+            redrawLinks();
+            commitHistory();
+        });
+
+        document.getElementById('removeSelectedLinkBtn').addEventListener('click', () => {
+            const deleted = deleteSelectedLink();
+            if (!deleted) {
+                alert('Select a link first by clicking a line.');
+                return;
+            }
+            commitHistory();
+        });
+
+        document.getElementById('editLinkLabelBtn').addEventListener('click', () => {
+            if (!links.length) {
+                alert('No links available.');
+                return;
+            }
+            const last = links[links.length - 1];
+            const next = prompt('Update last link label:', last.label || '');
+            if (next === null) return;
+            last.label = next.trim();
+            redrawLinks();
+            commitHistory();
+        });
+
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            undo();
+        });
+
+        document.getElementById('redoBtn').addEventListener('click', () => {
+            redo();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace';
+            const isUndo = event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'z';
+            const isRedo = (event.ctrlKey && event.key.toLowerCase() === 'y')
+                || (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'z');
+
+            const activeTag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+            if (activeTag === 'textarea' || activeTag === 'input') {
+                return;
+            }
+
+            if (isUndo) {
+                if (undo()) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            if (isRedo) {
+                if (redo()) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            if (!isDeleteKey) return;
+
+            if (deleteSelectedLink()) {
+                commitHistory();
+                event.preventDefault();
+            }
+        });
+
+        commitHistory();
+        updateSnapUi();
+    </script>
+</body>
+</html>

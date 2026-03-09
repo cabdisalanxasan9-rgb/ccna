@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Activation Link Invalid</title>
+    <style>
+        body { margin: 0; font-family: "Poppins", "Trebuchet MS", sans-serif; background: #f4efe6; color: #1d2935; }
+        .wrap { max-width: 540px; margin: 10vh auto; background: #fffaf1; border: 1px solid #d7cbb8; border-radius: 12px; padding: 1.2rem; }
+        a { color: #005f73; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Invalid or expired link</h1>
+        <p>This activation link is invalid or has expired.</p>
+        <p>Create a new account or contact support if needed.</p>
+        <p><a href="{% url 'signup' %}">Back to signup</a></p>
+    </div>
+</body>
+</html>
