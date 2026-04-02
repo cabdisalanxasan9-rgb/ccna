@@ -180,6 +180,9 @@ LOGIN_RATE_LIMIT_ATTEMPTS = int(os.environ.get('LOGIN_RATE_LIMIT_ATTEMPTS', '5')
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('LOGIN_RATE_LIMIT_WINDOW_SECONDS', '900'))
 LOGIN_RATE_LIMIT_LOCKOUT_SECONDS = int(os.environ.get('LOGIN_RATE_LIMIT_LOCKOUT_SECONDS', '900'))
 
+# When false, users are activated immediately on signup (no email click needed).
+ACCOUNT_REQUIRE_EMAIL_VERIFICATION = _env_bool('ACCOUNT_REQUIRE_EMAIL_VERIFICATION', False)
+
 # Enable strong HTTPS and cookie settings when DJANGO_FORCE_HTTPS=true.
 DJANGO_FORCE_HTTPS = _env_bool('DJANGO_FORCE_HTTPS', False)
 SECURE_SSL_REDIRECT = DJANGO_FORCE_HTTPS

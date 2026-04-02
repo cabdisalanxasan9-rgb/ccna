@@ -229,8 +229,13 @@ def signup(request):
 		if form.is_valid():
 			user = form.save(commit=False)
 			user.email = form.cleaned_data["email"]
-			user.is_active = False
+			require_verification = bool(getattr(settings, "ACCOUNT_REQUIRE_EMAIL_VERIFICATION", False))
+			user.is_active = not require_verification
 			user.save()
+
+			if not require_verification:
+				auth_login(request, user)
+				return redirect("home")
 
 			uid = urlsafe_base64_encode(force_bytes(user.pk))
 			token = default_token_generator.make_token(user)
