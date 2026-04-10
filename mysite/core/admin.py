@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AIRequestLog, APIToken, NetworkLab, Task
+from .models import AIRequestLog, APIToken, NetworkLab, ProSubscription, Task
 
 
 @admin.register(Task)
@@ -28,3 +28,10 @@ class APITokenAdmin(admin.ModelAdmin):
 	list_display = ("owner", "name", "is_active", "created_at")
 	list_filter = ("is_active", "created_at")
 	search_fields = ("owner__username", "name", "key")
+
+
+@admin.register(ProSubscription)
+class ProSubscriptionAdmin(admin.ModelAdmin):
+	list_display = ("owner", "plan_name", "status", "current_period_end", "updated_at")
+	list_filter = ("status", "plan_name", "updated_at")
+	search_fields = ("owner__username", "stripe_customer_id", "stripe_subscription_id")

@@ -89,3 +89,41 @@ class APIToken(models.Model):
 
 	def __str__(self):
 		return f"{self.owner} {self.name}"
+
+
+class ProSubscription(models.Model):
+	STATUS_INACTIVE = "inactive"
+	STATUS_ACTIVE = "active"
+	STATUS_CANCELED = "canceled"
+	STATUS_CHOICES = [
+		(STATUS_INACTIVE, "Inactive"),
+		(STATUS_ACTIVE, "Active"),
+		(STATUS_CANCELED, "Canceled"),
+	]
+
+	owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name="pro_subscription")
+	plan_name = models.CharField(max_length=60, default="pro_monthly")
+	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_INACTIVE)
+	current_period_end = models.DateTimeField(null=True, blank=True)
+	last_payment_at = models.DateTimeField(null=True, blank=True)
+	stripe_customer_id = models.CharField(max_length=120, blank=True)
+	stripe_subscription_id = models.CharField(max_length=120, blank=True, db_index=True)
+	stripe_checkout_session_id = models.CharField(max_length=120, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ["-updated_at"]
+
+	def __str__(self):
+		return f"{self.owner} {self.status}"
+
+	@property
+	def is_active_now(self):
+		from django.utils import timezone
+
+		if self.status != self.STATUS_ACTIVE:
+			return False
+		if self.current_period_end is None:
+			return True
+		return self.current_period_end > timezone.now()

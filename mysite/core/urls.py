@@ -11,7 +11,10 @@ from .views import (
     error_analyzer,
     home,
     lab_list,
+    pro_checkout_start,
+    pro_manage_subscription,
     signup,
+    stripe_webhook,
     topology_builder,
 )
 
@@ -24,10 +27,13 @@ urlpatterns = [
     path("analyzer/", error_analyzer, name="error_analyzer"),
     path("topology-builder/", topology_builder, name="topology_builder"),
     path("ai-assistant/", ai_assistant, name="ai_assistant"),
+    path("billing/pro/checkout/", pro_checkout_start, name="pro_checkout_start"),
+    path("billing/pro/manage/", pro_manage_subscription, name="pro_manage_subscription"),
     path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
 
     path("api/health/", api_health, name="api_health"),
     path("api/tokens/create/", api_create_token, name="api_create_token"),
     path("api/labs/", api_labs, name="api_labs"),
     path("api/labs/<int:lab_id>/", api_lab_detail, name="api_lab_detail"),
+    path("api/billing/stripe/webhook/", stripe_webhook, name="stripe_webhook"),
 ]

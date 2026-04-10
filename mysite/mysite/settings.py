@@ -83,6 +83,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.ProAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -192,3 +193,35 @@ SECURE_HSTS_SECONDS = 31536000 if DJANGO_FORCE_HTTPS else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = DJANGO_FORCE_HTTPS
 SECURE_HSTS_PRELOAD = DJANGO_FORCE_HTTPS
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Pro billing settings
+PRO_FEATURES_REQUIRE_PAYMENT = _env_bool('PRO_FEATURES_REQUIRE_PAYMENT', True)
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '').strip()
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
+STRIPE_PRO_PRICE_ID = os.environ.get('STRIPE_PRO_PRICE_ID', '').strip()
+ALLOW_DEV_PRO_UPGRADE_WITHOUT_STRIPE = _env_bool('ALLOW_DEV_PRO_UPGRADE_WITHOUT_STRIPE', False)
+
+_pro_paths_raw = os.environ.get('PRO_ONLY_PATH_PREFIXES', '/api/tokens/create/')
+PRO_ONLY_PATH_PREFIXES = tuple(item.strip() for item in _pro_paths_raw.split(',') if item.strip())
+PRO_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('PRO_RATE_LIMIT_WINDOW_SECONDS', '60'))
+PRO_RATE_LIMIT_REQUESTS = int(os.environ.get('PRO_RATE_LIMIT_REQUESTS', '30'))
+
+PRO_RATE_LIMIT_RULES = {
+    'ai_assistant': {
+        'requests': int(os.environ.get('PRO_RATE_LIMIT_AI_ASSISTANT_REQUESTS', '10')),
+        'window_seconds': int(os.environ.get('PRO_RATE_LIMIT_AI_ASSISTANT_WINDOW_SECONDS', '60')),
+    },
+    'api_labs_post': {
+        'requests': int(os.environ.get('PRO_RATE_LIMIT_API_LABS_POST_REQUESTS', '20')),
+        'window_seconds': int(os.environ.get('PRO_RATE_LIMIT_API_LABS_POST_WINDOW_SECONDS', '60')),
+    },
+    'api_lab_delete': {
+        'requests': int(os.environ.get('PRO_RATE_LIMIT_API_LAB_DELETE_REQUESTS', '10')),
+        'window_seconds': int(os.environ.get('PRO_RATE_LIMIT_API_LAB_DELETE_WINDOW_SECONDS', '60')),
+    },
+    'api_create_token': {
+        'requests': int(os.environ.get('PRO_RATE_LIMIT_API_CREATE_TOKEN_REQUESTS', '3')),
+        'window_seconds': int(os.environ.get('PRO_RATE_LIMIT_API_CREATE_TOKEN_WINDOW_SECONDS', '60')),
+    },
+}

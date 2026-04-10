@@ -5,8 +5,9 @@ import time
 import textwrap
 import urllib.error
 import urllib.request
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 from functools import wraps
+from typing import Optional
 
 from django import forms
 from django.conf import settings
@@ -16,6 +17,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.http import HttpResponse, JsonResponse
@@ -24,6 +26,7 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes, force_str
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from reportlab.lib.pagesizes import A4
@@ -38,7 +41,12 @@ from .lab_engine import (
 	normalize_protocols,
 )
 from .models import AIRequestLog, NetworkLab
-from .models import APIToken
+from .models import APIToken, ProSubscription
+
+try:
+	import stripe
+except Exception:
+	stripe = None
 
 
 class AuthLoginView(LoginView):
@@ -104,6 +112,118 @@ class SignupForm(UserCreationForm):
 
 def _is_staff(user):
 	return user.is_authenticated and user.is_staff
+
+
+def _pro_payment_required() -> bool:
+	return bool(getattr(settings, "PRO_FEATURES_REQUIRE_PAYMENT", True))
+
+
+def _stripe_is_ready() -> bool:
+	return bool(
+		stripe
+		and getattr(settings, "STRIPE_SECRET_KEY", "")
+		and getattr(settings, "STRIPE_PRO_PRICE_ID", "")
+	)
+
+
+def _stripe_portal_ready() -> bool:
+	return bool(stripe and getattr(settings, "STRIPE_SECRET_KEY", ""))
+
+
+def _stripe_value(obj, key: str, default=None):
+	if obj is None:
+		return default
+	if isinstance(obj, dict):
+		return obj.get(key, default)
+	return getattr(obj, key, default)
+
+
+def _get_or_create_subscription(user) -> ProSubscription:
+	subscription, _ = ProSubscription.objects.get_or_create(owner=user)
+	return subscription
+
+
+def _user_has_active_pro(user) -> bool:
+	if not user or not getattr(user, "is_authenticated", False):
+		return False
+	if user.is_staff:
+		return True
+	if not _pro_payment_required():
+		return True
+	subscription = ProSubscription.objects.filter(owner=user).first()
+	return bool(subscription and subscription.is_active_now)
+
+
+def _json_pro_required_response():
+	return JsonResponse(
+		{
+			"error": "Pro subscription required.",
+			"detail": "Upgrade to Pro to access this endpoint.",
+		},
+		status=402,
+	)
+
+
+def _check_pro_rate_limit(user, scope: str):
+	if not user or not getattr(user, "is_authenticated", False):
+		return None
+
+	rules = getattr(settings, "PRO_RATE_LIMIT_RULES", {}) or {}
+	scope_rule = rules.get(scope, {}) if isinstance(rules, dict) else {}
+
+	window = max(
+		1,
+		int(scope_rule.get("window_seconds", getattr(settings, "PRO_RATE_LIMIT_WINDOW_SECONDS", 60))),
+	)
+	max_requests = max(
+		1,
+		int(scope_rule.get("requests", getattr(settings, "PRO_RATE_LIMIT_REQUESTS", 30))),
+	)
+	cache_key = f"pro:rate:{user.id}:{scope}"
+	count = int(cache.get(cache_key, 0)) + 1
+	cache.set(cache_key, count, timeout=window)
+
+	if count <= max_requests:
+		return None
+
+	response = JsonResponse(
+		{
+			"error": "Rate limit exceeded.",
+			"detail": f"Try again in about {window} seconds.",
+		},
+		status=429,
+	)
+	response["Retry-After"] = str(window)
+	response["X-RateLimit-Limit"] = str(max_requests)
+	response["X-RateLimit-Remaining"] = "0"
+	response["X-RateLimit-Window"] = str(window)
+	response["X-RateLimit-Scope"] = scope
+	return response
+
+
+def _apply_pro_rate_limit_headers(response, user, scope: str):
+	if not user or not getattr(user, "is_authenticated", False):
+		return response
+
+	rules = getattr(settings, "PRO_RATE_LIMIT_RULES", {}) or {}
+	scope_rule = rules.get(scope, {}) if isinstance(rules, dict) else {}
+	window = max(
+		1,
+		int(scope_rule.get("window_seconds", getattr(settings, "PRO_RATE_LIMIT_WINDOW_SECONDS", 60))),
+	)
+	max_requests = max(
+		1,
+		int(scope_rule.get("requests", getattr(settings, "PRO_RATE_LIMIT_REQUESTS", 30))),
+	)
+	cache_key = f"pro:rate:{user.id}:{scope}"
+	count = int(cache.get(cache_key, 0))
+	remaining = max(0, max_requests - count)
+
+	response["X-RateLimit-Limit"] = str(max_requests)
+	response["X-RateLimit-Remaining"] = str(remaining)
+	response["X-RateLimit-Window"] = str(window)
+	response["X-RateLimit-Scope"] = scope
+	return response
 
 
 def _get_token_user(request):
@@ -285,10 +405,16 @@ def activate_account(request, uidb64: str, token: str):
 @login_required
 def home(request):
 	latest_labs = _lab_queryset_for_user(request.user)[:8]
+	is_pro = _user_has_active_pro(request.user)
+	pro_required = _pro_payment_required()
+	subscription = ProSubscription.objects.filter(owner=request.user).first()
 	context = {
 		"latest_labs": latest_labs,
 		"generated": None,
 		"is_admin": request.user.is_staff,
+		"is_pro": is_pro,
+		"pro_required": pro_required,
+		"has_subscription_customer": bool(subscription and subscription.stripe_customer_id),
 		"form_data": {
 			"name": "CCNA Practice Lab",
 			"routers": 2,
@@ -537,8 +663,15 @@ def ai_assistant(request):
 	prompt = ""
 	cache_hit = False
 	request_ms = 0
-	status_note = ""
+	status_note = request.session.pop("billing_status_note", "")
 	has_api_key = bool(request.session.get("openai_api_key") or os.environ.get("OPENAI_API_KEY"))
+	is_pro = _user_has_active_pro(request.user)
+	pro_required = _pro_payment_required()
+	can_use_ai = is_pro or not pro_required
+	subscription = ProSubscription.objects.filter(owner=request.user).first()
+
+	if request.GET.get("upgraded") == "1":
+		status_note = "Payment completed. Pro status is now active."
 
 	if request.method == "POST":
 		prompt = request.POST.get("prompt", "").strip()
@@ -553,7 +686,34 @@ def ai_assistant(request):
 			has_api_key = bool(os.environ.get("OPENAI_API_KEY"))
 			status_note = "Session API key cleared."
 
-		if prompt:
+		if prompt and can_use_ai:
+			rate_limit_response = _check_pro_rate_limit(request.user, "ai_assistant")
+			if rate_limit_response:
+				status_note = "Rate limit reached. Please wait and try again."
+				response_text = ""
+				recent_logs = AIRequestLog.objects.filter(owner=request.user)[:10]
+				billing_url = reverse("pro_checkout_start")
+				return render(
+					request,
+					"core/ai_assistant.html",
+					{
+						"prompt": prompt,
+						"response_text": response_text,
+						"cache_hit": cache_hit,
+						"request_ms": request_ms,
+						"status_note": status_note,
+						"has_api_key": has_api_key,
+						"recent_logs": recent_logs,
+						"is_pro": is_pro,
+						"pro_required": pro_required,
+						"can_use_ai": can_use_ai,
+						"billing_url": billing_url,
+						"stripe_ready": _stripe_is_ready(),
+						"has_subscription_customer": bool(subscription and subscription.stripe_customer_id),
+						"has_subscription": bool(subscription),
+					},
+				)
+
 			api_key = (
 				request.session.get("openai_api_key", "").strip()
 				or os.environ.get("OPENAI_API_KEY", "").strip()
@@ -644,11 +804,15 @@ def ai_assistant(request):
 					cache_hit=False,
 					response_ms=request_ms,
 				)
+		elif not can_use_ai:
+			status_note = "This feature is Pro-only. Click Upgrade to Pro to continue."
+			response_text = ""
 		else:
 			if not status_note:
 				status_note = "Type a prompt then click Ask AI."
 
 	recent_logs = AIRequestLog.objects.filter(owner=request.user)[:10]
+	billing_url = reverse("pro_checkout_start")
 	return render(
 		request,
 		"core/ai_assistant.html",
@@ -660,8 +824,184 @@ def ai_assistant(request):
 			"status_note": status_note,
 			"has_api_key": has_api_key,
 			"recent_logs": recent_logs,
+			"is_pro": is_pro,
+			"pro_required": pro_required,
+			"can_use_ai": can_use_ai,
+			"billing_url": billing_url,
+			"stripe_ready": _stripe_is_ready(),
+			"has_subscription_customer": bool(subscription and subscription.stripe_customer_id),
+			"has_subscription": bool(subscription),
 		},
 	)
+
+
+@login_required
+@require_http_methods(["POST"])
+def pro_checkout_start(request):
+	if _user_has_active_pro(request.user):
+		messages.info(request, "Your Pro subscription is already active.")
+		return redirect("ai_assistant")
+
+	if not _pro_payment_required():
+		messages.info(request, "Pro payment mode is currently disabled.")
+		return redirect("ai_assistant")
+
+	if not _stripe_is_ready():
+		if bool(getattr(settings, "ALLOW_DEV_PRO_UPGRADE_WITHOUT_STRIPE", False)):
+			subscription = _get_or_create_subscription(request.user)
+			subscription.status = ProSubscription.STATUS_ACTIVE
+			subscription.plan_name = "pro_dev_bypass"
+			subscription.last_payment_at = timezone.now()
+			subscription.save()
+			request.session["billing_status_note"] = "Dev mode: Pro activated without Stripe checkout."
+			return redirect("ai_assistant")
+
+		request.session["billing_status_note"] = (
+			"Stripe is not configured yet. Set STRIPE_SECRET_KEY and STRIPE_PRO_PRICE_ID in environment."
+		)
+		return redirect("ai_assistant")
+
+	stripe.api_key = settings.STRIPE_SECRET_KEY
+	success_url = request.build_absolute_uri(reverse("ai_assistant")) + "?upgraded=1"
+	cancel_url = request.build_absolute_uri(reverse("ai_assistant"))
+
+	try:
+		session = stripe.checkout.Session.create(
+			mode="subscription",
+			line_items=[{"price": settings.STRIPE_PRO_PRICE_ID, "quantity": 1}],
+			success_url=success_url,
+			cancel_url=cancel_url,
+			customer_email=(request.user.email or None),
+			client_reference_id=str(request.user.id),
+			metadata={"user_id": str(request.user.id), "plan": "pro_monthly"},
+		)
+
+		subscription = _get_or_create_subscription(request.user)
+		subscription.stripe_checkout_session_id = _stripe_value(session, "id", "") or ""
+		subscription.plan_name = "pro_monthly"
+		subscription.save(update_fields=["stripe_checkout_session_id", "plan_name", "updated_at"])
+		checkout_url = _stripe_value(session, "url", "")
+		if not checkout_url:
+			request.session["billing_status_note"] = "Stripe checkout URL was not returned."
+			return redirect("ai_assistant")
+		return redirect(checkout_url)
+	except Exception as exc:
+		request.session["billing_status_note"] = f"Unable to start checkout: {exc}"
+		return redirect("ai_assistant")
+
+
+@login_required
+@require_http_methods(["POST"])
+def pro_manage_subscription(request):
+	if not _stripe_portal_ready():
+		request.session["billing_status_note"] = "Stripe portal is not configured yet."
+		return redirect("ai_assistant")
+
+	subscription = ProSubscription.objects.filter(owner=request.user).first()
+	if not subscription or not subscription.stripe_customer_id:
+		request.session["billing_status_note"] = "No billing profile found yet. Complete upgrade first."
+		return redirect("ai_assistant")
+
+	stripe.api_key = settings.STRIPE_SECRET_KEY
+	return_url = request.build_absolute_uri(reverse("ai_assistant"))
+
+	try:
+		portal = stripe.billing_portal.Session.create(
+			customer=subscription.stripe_customer_id,
+			return_url=return_url,
+		)
+		return redirect(portal.url)
+	except Exception as exc:
+		request.session["billing_status_note"] = f"Unable to open billing portal: {exc}"
+		return redirect("ai_assistant")
+
+
+def _resolve_user_for_stripe_event(event_obj: dict) -> Optional[object]:
+	metadata = _stripe_value(event_obj, "metadata", {}) or {}
+	user_id = _stripe_value(metadata, "user_id")
+	if user_id:
+		try:
+			return get_user_model().objects.filter(id=int(user_id)).first()
+		except (TypeError, ValueError):
+			pass
+
+	client_reference_id = _stripe_value(event_obj, "client_reference_id")
+	if client_reference_id:
+		try:
+			return get_user_model().objects.filter(id=int(client_reference_id)).first()
+		except (TypeError, ValueError):
+			pass
+
+	customer_id = _stripe_value(event_obj, "customer")
+	if customer_id:
+		subscription = ProSubscription.objects.filter(stripe_customer_id=customer_id).first()
+		if subscription:
+			return subscription.owner
+
+	return None
+
+
+def _update_subscription_from_payload(user, payload: dict, active: bool):
+	if not user:
+		return
+
+	subscription = _get_or_create_subscription(user)
+	period_end_raw = _stripe_value(payload, "current_period_end")
+	period_end = None
+	if period_end_raw:
+		try:
+			period_end = timezone.datetime.fromtimestamp(int(period_end_raw), tz=dt_timezone.utc)
+		except (TypeError, ValueError, OSError):
+			period_end = None
+
+	subscription.status = ProSubscription.STATUS_ACTIVE if active else ProSubscription.STATUS_CANCELED
+	subscription.current_period_end = period_end
+	subscription.last_payment_at = timezone.now() if active else subscription.last_payment_at
+	subscription.stripe_customer_id = _stripe_value(payload, "customer", "") or subscription.stripe_customer_id
+	subscription.stripe_subscription_id = _stripe_value(payload, "id", "") or subscription.stripe_subscription_id
+	subscription.save()
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def stripe_webhook(request):
+	if not stripe or not getattr(settings, "STRIPE_WEBHOOK_SECRET", ""):
+		return JsonResponse({"error": "Webhook not configured"}, status=400)
+
+	payload = request.body
+	signature = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+
+	try:
+		event = stripe.Webhook.construct_event(payload, signature, settings.STRIPE_WEBHOOK_SECRET)
+	except Exception:
+		return JsonResponse({"error": "Invalid webhook signature"}, status=400)
+
+	event_type = _stripe_value(event, "type", "")
+	data = _stripe_value(event, "data", {}) or {}
+	obj = _stripe_value(data, "object", {}) or {}
+
+	if event_type == "checkout.session.completed":
+		user = _resolve_user_for_stripe_event(obj)
+		if user:
+			subscription = _get_or_create_subscription(user)
+			subscription.status = ProSubscription.STATUS_ACTIVE
+			subscription.last_payment_at = timezone.now()
+			subscription.stripe_customer_id = _stripe_value(obj, "customer", "") or subscription.stripe_customer_id
+			subscription.stripe_subscription_id = _stripe_value(obj, "subscription", "") or subscription.stripe_subscription_id
+			subscription.stripe_checkout_session_id = _stripe_value(obj, "id", "") or subscription.stripe_checkout_session_id
+			subscription.save()
+
+	elif event_type == "customer.subscription.updated":
+		user = _resolve_user_for_stripe_event(obj)
+		status = _stripe_value(obj, "status", "")
+		is_active = status in {"active", "trialing"}
+		_update_subscription_from_payload(user, obj, active=is_active)
+
+	elif event_type == "customer.subscription.deleted":
+		user = _resolve_user_for_stripe_event(obj)
+		_update_subscription_from_payload(user, obj, active=False)
+
+	return JsonResponse({"received": True})
 
 
 @api_auth_required
@@ -695,13 +1035,20 @@ def api_labs(request):
 		]
 		return JsonResponse({"count": len(rows), "results": rows})
 
+	if _pro_payment_required() and not _user_has_active_pro(api_user):
+		return _json_pro_required_response()
+
+	rate_limit_response = _check_pro_rate_limit(api_user, "api_labs_post")
+	if rate_limit_response:
+		return rate_limit_response
+
 	try:
 		form_data = _parse_api_payload(request.body)
 	except (ValueError, json.JSONDecodeError):
 		return JsonResponse({"error": "Invalid JSON payload"}, status=400)
 
 	lab, generated = _build_lab_and_save(api_user, form_data)
-	return JsonResponse(
+	response = JsonResponse(
 		{
 			"id": lab.id,
 			"name": lab.name,
@@ -710,6 +1057,7 @@ def api_labs(request):
 		},
 		status=201,
 	)
+	return _apply_pro_rate_limit_headers(response, api_user, "api_labs_post")
 
 
 @api_auth_required
@@ -722,8 +1070,14 @@ def api_lab_detail(request, lab_id: int):
 	lab = _lab_get_for_user_or_404(api_user, lab_id)
 
 	if request.method == "DELETE":
+		if _pro_payment_required() and not _user_has_active_pro(api_user):
+			return _json_pro_required_response()
+		rate_limit_response = _check_pro_rate_limit(api_user, "api_lab_delete")
+		if rate_limit_response:
+			return rate_limit_response
 		lab.delete()
-		return JsonResponse({"deleted": True, "id": lab_id})
+		response = JsonResponse({"deleted": True, "id": lab_id})
+		return _apply_pro_rate_limit_headers(response, api_user, "api_lab_delete")
 
 	return JsonResponse(
 		{
@@ -754,9 +1108,16 @@ def api_lab_detail(request, lab_id: int):
 @login_required
 @require_http_methods(["POST"])
 def api_create_token(request):
+	if _pro_payment_required() and not _user_has_active_pro(request.user):
+		return _json_pro_required_response()
+
+	rate_limit_response = _check_pro_rate_limit(request.user, "api_create_token")
+	if rate_limit_response:
+		return rate_limit_response
+
 	name = request.POST.get("name", "default").strip() or "default"
 	token = APIToken.objects.create(owner=request.user, name=name)
-	return JsonResponse(
+	response = JsonResponse(
 		{
 			"id": token.id,
 			"name": token.name,
@@ -764,3 +1125,4 @@ def api_create_token(request):
 			"created_at": token.created_at.isoformat(),
 		}
 	)
+	return _apply_pro_rate_limit_headers(response, request.user, "api_create_token")

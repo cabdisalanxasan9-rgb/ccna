@@ -23,6 +23,30 @@
         <div class="card">
             <h1>AI Lab Assistant</h1>
             <p>Ask for network lab designs, troubleshooting steps, or protocol explanations.</p>
+            <p class="muted">
+                Pro status:
+                {% if is_pro %}
+                    Active
+                {% else %}
+                    Inactive
+                {% endif %}
+                {% if pro_required %}| Billing required{% else %}| Billing disabled{% endif %}
+            </p>
+            {% if pro_required and not is_pro %}
+                <form method="post" action="{{ billing_url }}">
+                    {% csrf_token %}
+                    <button type="submit">Upgrade to Pro</button>
+                </form>
+                {% if not stripe_ready %}
+                    <p class="muted">Stripe setup missing on server (need key + price ID).</p>
+                {% endif %}
+            {% endif %}
+            {% if has_subscription and has_subscription_customer %}
+                <form method="post" action="{% url 'pro_manage_subscription' %}">
+                    {% csrf_token %}
+                    <button class="btn-alt" type="submit">Manage Subscription</button>
+                </form>
+            {% endif %}
             <p><a href="/">Back to Builder</a></p>
         </div>
 
@@ -30,12 +54,12 @@
             <form method="post">
                 {% csrf_token %}
                 <label for="prompt">Prompt</label>
-                <textarea id="prompt" name="prompt" placeholder="Example: Build a 3-router OSPF lab with VLAN and NAT.">{{ prompt }}</textarea>
+                <textarea id="prompt" name="prompt" placeholder="Example: Build a 3-router OSPF lab with VLAN and NAT." {% if not can_use_ai %}disabled{% endif %}>{{ prompt }}</textarea>
                 <label for="api_key">OpenAI API Key (optional, stored in session)</label>
                 <input id="api_key" name="api_key" type="password" placeholder="sk-...">
                 <p class="muted">API key status: {% if has_api_key %}Available{% else %}Not set{% endif %}</p>
                 <p>
-                    <button type="submit">Ask AI</button>
+                    <button type="submit" {% if not can_use_ai %}disabled{% endif %}>Ask AI</button>
                     <button class="btn-alt" type="submit" name="clear_api_key" value="1">Clear Saved Key</button>
                 </p>
             </form>
