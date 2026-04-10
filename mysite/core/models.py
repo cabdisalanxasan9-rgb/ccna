@@ -127,3 +127,33 @@ class ProSubscription(models.Model):
 		if self.current_period_end is None:
 			return True
 		return self.current_period_end > timezone.now()
+
+
+class ZaadPaymentRequest(models.Model):
+	STATUS_PENDING = "pending"
+	STATUS_APPROVED = "approved"
+	STATUS_REJECTED = "rejected"
+	STATUS_CHOICES = [
+		(STATUS_PENDING, "Pending"),
+		(STATUS_APPROVED, "Approved"),
+		(STATUS_REJECTED, "Rejected"),
+	]
+
+	owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="zaad_payment_requests")
+	reference = models.CharField(max_length=80, db_index=True)
+	sender_phone = models.CharField(max_length=30, blank=True)
+	amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+	currency = models.CharField(max_length=10, default="USD")
+	note = models.TextField(blank=True)
+	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+	review_note = models.TextField(blank=True)
+	reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="zaad_reviews")
+	reviewed_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ["-created_at"]
+
+	def __str__(self):
+		return f"{self.owner} {self.reference} {self.status}"

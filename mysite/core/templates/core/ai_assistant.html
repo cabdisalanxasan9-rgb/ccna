@@ -16,6 +16,8 @@
         .muted { color: #667380; font-size: 0.9rem; }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; border-bottom: 1px solid #eadfce; padding: 0.45rem; font-size: 0.9rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        input[type="text"], input[type="number"] { width: 100%; border: 1px solid #d7cbb8; border-radius: 8px; padding: 0.55rem; }
     </style>
 </head>
 <body>
@@ -41,6 +43,43 @@
                     <p class="muted">Stripe setup missing on server (need key + price ID).</p>
                 {% endif %}
             {% endif %}
+
+            {% if pro_required and not is_pro and zaad_enabled %}
+                <hr style="border:none;border-top:1px solid #eadfce;margin:1rem 0;">
+                <h3>Pay with Zaad</h3>
+                {% if zaad_merchant_number %}
+                    <p class="muted">Send payment to Zaad number: <strong>{{ zaad_merchant_number }}</strong></p>
+                    <p class="muted">Expected amount: {{ zaad_amount }} {{ zaad_currency }}</p>
+                    <form method="post" action="{% url 'zaad_payment_submit' %}">
+                        {% csrf_token %}
+                        <div class="grid-2">
+                            <div>
+                                <label for="zaad_reference">Transaction Reference</label>
+                                <input id="zaad_reference" name="zaad_reference" type="text" required>
+                            </div>
+                            <div>
+                                <label for="zaad_sender_phone">Sender Phone</label>
+                                <input id="zaad_sender_phone" name="zaad_sender_phone" type="text" placeholder="252...">
+                            </div>
+                            <div>
+                                <label for="zaad_amount">Amount</label>
+                                <input id="zaad_amount" name="zaad_amount" type="number" step="0.01" placeholder="{{ zaad_amount }}">
+                            </div>
+                            <div>
+                                <label for="zaad_note">Note (optional)</label>
+                                <input id="zaad_note" name="zaad_note" type="text" placeholder="Any proof details">
+                            </div>
+                        </div>
+                        <p style="margin-top:0.75rem;"><button type="submit">Submit Zaad Payment</button></p>
+                    </form>
+                {% else %}
+                    <p class="muted">Zaad merchant number is not configured yet.</p>
+                {% endif %}
+                {% if latest_zaad_payment %}
+                    <p class="muted">Latest Zaad request: {{ latest_zaad_payment.reference }} | Status: {{ latest_zaad_payment.status|title }}</p>
+                {% endif %}
+            {% endif %}
+
             {% if has_subscription and has_subscription_customer %}
                 <form method="post" action="{% url 'pro_manage_subscription' %}">
                     {% csrf_token %}

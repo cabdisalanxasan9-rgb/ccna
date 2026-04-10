@@ -13,6 +13,7 @@ from .views import (
     lab_list,
     pro_checkout_start,
     pro_manage_subscription,
+    zaad_payment_submit,
     signup,
     stripe_webhook,
     topology_builder,
@@ -29,6 +30,7 @@ urlpatterns = [
     path("ai-assistant/", ai_assistant, name="ai_assistant"),
     path("billing/pro/checkout/", pro_checkout_start, name="pro_checkout_start"),
     path("billing/pro/manage/", pro_manage_subscription, name="pro_manage_subscription"),
+    path("billing/zaad/submit/", zaad_payment_submit, name="zaad_payment_submit"),
     path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
 
     path("api/health/", api_health, name="api_health"),

@@ -41,7 +41,7 @@ from .lab_engine import (
 	normalize_protocols,
 )
 from .models import AIRequestLog, NetworkLab
-from .models import APIToken, ProSubscription
+from .models import APIToken, ProSubscription, ZaadPaymentRequest
 
 try:
 	import stripe
@@ -128,6 +128,10 @@ def _stripe_is_ready() -> bool:
 
 def _stripe_portal_ready() -> bool:
 	return bool(stripe and getattr(settings, "STRIPE_SECRET_KEY", ""))
+
+
+def _zaad_manual_enabled() -> bool:
+	return bool(getattr(settings, "ZAAD_MANUAL_PAYMENT_ENABLED", True))
 
 
 def _stripe_value(obj, key: str, default=None):
@@ -669,6 +673,11 @@ def ai_assistant(request):
 	pro_required = _pro_payment_required()
 	can_use_ai = is_pro or not pro_required
 	subscription = ProSubscription.objects.filter(owner=request.user).first()
+	zaad_enabled = _zaad_manual_enabled()
+	zaad_merchant_number = getattr(settings, "ZAAD_MERCHANT_NUMBER", "")
+	zaad_amount = getattr(settings, "ZAAD_PRO_AMOUNT", "5")
+	zaad_currency = getattr(settings, "ZAAD_PRO_CURRENCY", "USD")
+	latest_zaad_payment = ZaadPaymentRequest.objects.filter(owner=request.user).first()
 
 	if request.GET.get("upgraded") == "1":
 		status_note = "Payment completed. Pro status is now active."
@@ -711,6 +720,11 @@ def ai_assistant(request):
 						"stripe_ready": _stripe_is_ready(),
 						"has_subscription_customer": bool(subscription and subscription.stripe_customer_id),
 						"has_subscription": bool(subscription),
+						"zaad_enabled": zaad_enabled,
+						"zaad_merchant_number": zaad_merchant_number,
+						"zaad_amount": zaad_amount,
+						"zaad_currency": zaad_currency,
+						"latest_zaad_payment": latest_zaad_payment,
 					},
 				)
 
@@ -831,6 +845,11 @@ def ai_assistant(request):
 			"stripe_ready": _stripe_is_ready(),
 			"has_subscription_customer": bool(subscription and subscription.stripe_customer_id),
 			"has_subscription": bool(subscription),
+			"zaad_enabled": zaad_enabled,
+			"zaad_merchant_number": zaad_merchant_number,
+			"zaad_amount": zaad_amount,
+			"zaad_currency": zaad_currency,
+			"latest_zaad_payment": latest_zaad_payment,
 		},
 	)
 
@@ -914,6 +933,47 @@ def pro_manage_subscription(request):
 	except Exception as exc:
 		request.session["billing_status_note"] = f"Unable to open billing portal: {exc}"
 		return redirect("ai_assistant")
+
+
+@login_required
+@require_http_methods(["POST"])
+def zaad_payment_submit(request):
+	if not _zaad_manual_enabled():
+		request.session["billing_status_note"] = "Zaad payment is currently disabled."
+		return redirect("ai_assistant")
+
+	if _user_has_active_pro(request.user):
+		request.session["billing_status_note"] = "Your Pro subscription is already active."
+		return redirect("ai_assistant")
+
+	reference = (request.POST.get("zaad_reference") or "").strip()
+	sender_phone = (request.POST.get("zaad_sender_phone") or "").strip()
+	note = (request.POST.get("zaad_note") or "").strip()
+	amount_raw = (request.POST.get("zaad_amount") or "").strip()
+	amount_value = None
+
+	if not reference:
+		request.session["billing_status_note"] = "Please provide Zaad transaction reference."
+		return redirect("ai_assistant")
+
+	if amount_raw:
+		try:
+			amount_value = float(amount_raw)
+		except ValueError:
+			request.session["billing_status_note"] = "Amount must be a valid number."
+			return redirect("ai_assistant")
+
+	currency = getattr(settings, "ZAAD_PRO_CURRENCY", "USD")
+	ZaadPaymentRequest.objects.create(
+		owner=request.user,
+		reference=reference,
+		sender_phone=sender_phone,
+		amount=amount_value,
+		currency=currency,
+		note=note,
+	)
+	request.session["billing_status_note"] = "Zaad payment submitted. Admin review is pending."
+	return redirect("ai_assistant")
 
 
 def _resolve_user_for_stripe_event(event_obj: dict) -> Optional[object]:
