@@ -1,7 +1,50 @@
 from django.contrib import admin
+from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 
 from .models import AIRequestLog, APIToken, NetworkLab, ProSubscription, Task, ZaadPaymentRequest
+
+
+def _send_zaad_review_email(payment: ZaadPaymentRequest, approved: bool) -> None:
+	if not payment.owner or not getattr(payment.owner, "email", ""):
+		return
+
+	status_text = "approved" if approved else "rejected"
+	subject = f"Your Zaad payment request was {status_text}"
+	body_lines = [
+		f"Hello {payment.owner.username},",
+		"",
+		f"Your Zaad payment request ({payment.reference}) has been {status_text}.",
+	]
+
+	if approved:
+		body_lines.extend([
+			"Your Pro subscription is now active.",
+		])
+	else:
+		body_lines.extend([
+			"Please verify your transaction details and submit again if needed.",
+		])
+
+	if payment.review_note:
+		body_lines.extend([
+			"",
+			f"Admin note: {payment.review_note}",
+		])
+
+	body_lines.extend([
+		"",
+		"Thank you.",
+	])
+
+	send_mail(
+		subject=subject,
+		message="\n".join(body_lines),
+		from_email=settings.DEFAULT_FROM_EMAIL,
+		recipient_list=[payment.owner.email],
+		fail_silently=True,
+	)
 
 
 @admin.register(Task)
@@ -61,6 +104,7 @@ class ZaadPaymentRequestAdmin(admin.ModelAdmin):
 			subscription.plan_name = "pro_zaad_manual"
 			subscription.last_payment_at = now
 			subscription.save()
+			_send_zaad_review_email(payment, approved=True)
 			approved_count += 1
 
 		self.message_user(request, f"Approved {approved_count} request(s) and activated Pro.")
@@ -68,9 +112,12 @@ class ZaadPaymentRequestAdmin(admin.ModelAdmin):
 	@admin.action(description="Reject selected Zaad requests")
 	def reject_requests(self, request, queryset):
 		now = timezone.now()
-		updated = queryset.update(
-			status=ZaadPaymentRequest.STATUS_REJECTED,
-			reviewed_by=request.user,
-			reviewed_at=now,
-		)
-		self.message_user(request, f"Rejected {updated} request(s).")
+		rejected_count = 0
+		for payment in queryset.select_related("owner"):
+			payment.status = ZaadPaymentRequest.STATUS_REJECTED
+			payment.reviewed_by = request.user
+			payment.reviewed_at = now
+			payment.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+			_send_zaad_review_email(payment, approved=False)
+			rejected_count += 1
+		self.message_user(request, f"Rejected {rejected_count} request(s).")
