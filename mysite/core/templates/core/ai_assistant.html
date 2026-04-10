@@ -44,10 +44,12 @@
                 {% endif %}
             {% endif %}
 
-            {% if pro_required and not is_pro and zaad_enabled %}
+            {% if pro_required and not is_pro %}
                 <hr style="border:none;border-top:1px solid #eadfce;margin:1rem 0;">
                 <h3>Pay Directly (Mobile/Bank)</h3>
-                {% if manual_payment_options %}
+                {% if not zaad_enabled %}
+                    <p class="muted">Direct payment is disabled on server. Set ZAAD_MANUAL_PAYMENT_ENABLED=true.</p>
+                {% elif manual_payment_options %}
                     <p class="muted">Choose a payment channel below, send payment, then submit reference.</p>
                     <p class="muted">Expected amount: {{ zaad_amount }} {{ zaad_currency }}</p>
                     <table>
@@ -106,7 +108,7 @@
                         <p style="margin-top:0.75rem;"><button type="submit">Submit Zaad Payment</button></p>
                     </form>
                 {% else %}
-                    <p class="muted">No direct payment channel is configured yet.</p>
+                    <p class="muted">No direct payment channel is configured yet. Add PAYMENT_ZAAD_ACCOUNT (or EVC/SAHAL/BANK env vars) and redeploy.</p>
                 {% endif %}
                 {% if latest_zaad_payment %}
                     <p class="muted">Latest request: {{ latest_zaad_payment.reference }} | {{ latest_zaad_payment.payment_channel|upper }} | Status: {{ latest_zaad_payment.status|title }}</p>
