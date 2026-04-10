@@ -158,6 +158,8 @@ class ZaadPaymentRequest(models.Model):
 	sender_phone = models.CharField(max_length=30, blank=True)
 	amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 	currency = models.CharField(max_length=10, default="USD")
+	proof_file = models.FileField(upload_to="payment_proofs/", blank=True)
+	proof_link = models.URLField(blank=True)
 	note = models.TextField(blank=True)
 	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
 	review_note = models.TextField(blank=True)

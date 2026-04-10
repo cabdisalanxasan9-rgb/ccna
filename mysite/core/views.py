@@ -974,6 +974,8 @@ def zaad_payment_submit(request):
 	payment_channel = (request.POST.get("payment_channel") or "").strip().lower()
 	sender_phone = (request.POST.get("zaad_sender_phone") or "").strip()
 	note = (request.POST.get("zaad_note") or "").strip()
+	proof_link = (request.POST.get("payment_proof_link") or "").strip()
+	proof_file = request.FILES.get("payment_proof_file")
 	amount_raw = (request.POST.get("zaad_amount") or "").strip()
 	amount_value = None
 	recipient_label = ""
@@ -999,6 +1001,10 @@ def zaad_payment_submit(request):
 			request.session["billing_status_note"] = "Amount must be a valid number."
 			return redirect("ai_assistant")
 
+	if proof_file and getattr(proof_file, "size", 0) > 5 * 1024 * 1024:
+		request.session["billing_status_note"] = "Proof file is too large. Max size is 5MB."
+		return redirect("ai_assistant")
+
 	currency = getattr(settings, "ZAAD_PRO_CURRENCY", "USD")
 	ZaadPaymentRequest.objects.create(
 		owner=request.user,
@@ -1009,6 +1015,8 @@ def zaad_payment_submit(request):
 		sender_phone=sender_phone,
 		amount=amount_value,
 		currency=currency,
+		proof_file=proof_file,
+		proof_link=proof_link,
 		note=note,
 	)
 	request.session["billing_status_note"] = "Payment proof submitted. Admin review is pending."

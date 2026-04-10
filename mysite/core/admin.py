@@ -85,9 +85,9 @@ class ProSubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(ZaadPaymentRequest)
 class ZaadPaymentRequestAdmin(admin.ModelAdmin):
-	list_display = ("owner", "payment_channel", "recipient_account", "reference", "amount", "currency", "status", "created_at", "reviewed_at")
+	list_display = ("owner", "payment_channel", "recipient_account", "reference", "proof_link", "amount", "currency", "status", "created_at", "reviewed_at")
 	list_filter = ("status", "currency", "created_at")
-	search_fields = ("owner__username", "reference", "sender_phone", "recipient_account")
+	search_fields = ("owner__username", "reference", "sender_phone", "recipient_account", "proof_link")
 	actions = ("approve_requests", "reject_requests")
 
 	@admin.action(description="Approve selected Zaad requests and activate Pro")

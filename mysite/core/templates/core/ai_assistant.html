@@ -66,7 +66,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                    <form method="post" action="{% url 'zaad_payment_submit' %}">
+                    <form method="post" action="{% url 'zaad_payment_submit' %}" enctype="multipart/form-data">
                         {% csrf_token %}
                         <div class="grid-2">
                             <div>
@@ -93,6 +93,14 @@
                             <div>
                                 <label for="zaad_note">Note (optional)</label>
                                 <input id="zaad_note" name="zaad_note" type="text" placeholder="Any proof details">
+                            </div>
+                            <div>
+                                <label for="payment_proof_file">Proof File (optional)</label>
+                                <input id="payment_proof_file" name="payment_proof_file" type="file" accept="image/*,.pdf">
+                            </div>
+                            <div>
+                                <label for="payment_proof_link">Proof Link (optional)</label>
+                                <input id="payment_proof_link" name="payment_proof_link" type="text" placeholder="https://...">
                             </div>
                         </div>
                         <p style="margin-top:0.75rem;"><button type="submit">Submit Zaad Payment</button></p>
